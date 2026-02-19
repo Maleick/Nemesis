@@ -40,6 +40,30 @@ Follow the [quickstart guide](docs/quickstart.md).
 ## Usage
 See the [Nemesis Usage Guide](docs/usage_guide.md).
 
+## Operational Notes
+
+### Chatbot MCP credential preflight
+
+When the `--llm` profile is enabled, the `agents` service starts the chatbot MCP server (`genai-toolbox`) at startup.
+Nemesis now runs a startup preflight that validates the `chatbot_readonly` database login before launching MCP.
+If `CHATBOT_DB_PASSWORD` in `.env` drifts from the actual Postgres role password, startup logs include an explicit preflight failure with remediation guidance.
+
+If you rotate `CHATBOT_DB_PASSWORD` after initial database bootstrap, sync the role password and restart chatbot path services:
+
+```bash
+cd /path/to/Nemesis
+
+POSTGRES_USER=$(awk -F= '/^POSTGRES_USER=/{gsub(/"/,"",$2);print $2}' .env)
+POSTGRES_PASSWORD=$(awk -F= '/^POSTGRES_PASSWORD=/{gsub(/"/,"",$2);print $2}' .env)
+POSTGRES_DB=$(awk -F= '/^POSTGRES_DB=/{gsub(/"/,"",$2);print $2}' .env)
+CHATBOT_DB_PASSWORD=$(awk -F= '/^CHATBOT_DB_PASSWORD=/{gsub(/"/,"",$2);print $2}' .env)
+
+docker compose --profile llm -f compose.yaml exec -T postgres sh -lc \
+  "PGPASSWORD='${POSTGRES_PASSWORD}' psql -h postgres -U '${POSTGRES_USER}' -d '${POSTGRES_DB}' -v ON_ERROR_STOP=1 -c \"ALTER ROLE chatbot_readonly WITH PASSWORD '${CHATBOT_DB_PASSWORD}';\""
+
+docker compose --profile llm -f compose.yaml up -d agents agents-dapr
+```
+
 
 ## Additional Information
 Blog Posts:

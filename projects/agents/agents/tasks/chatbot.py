@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 
 import httpx
+import psycopg
 import structlog
 from agents.base_agent import BaseAgent
 from agents.logger import set_agent_metadata
@@ -141,6 +142,31 @@ This order ensures you check the most relevant credential sources first before f
 
         return f"postgresql://chatbot_readonly:{chatbot_password}@{postgres_host}:{postgres_port}/{postgres_db}?{postgres_params}"
 
+    def _chatbot_db_preflight_context(self) -> dict:
+        """Context values for startup diagnostics (never includes secrets)."""
+        return {
+            "user": "chatbot_readonly",
+            "host": os.getenv("POSTGRES_HOST", "postgres"),
+            "port": os.getenv("POSTGRES_PORT", "5432"),
+            "database": os.getenv("POSTGRES_DB", "enrichment"),
+            "params": os.getenv("POSTGRES_PARAMETERS", "sslmode=disable"),
+        }
+
+    def _validate_chatbot_db_credentials(self) -> tuple[bool, str | None]:
+        """Validate chatbot readonly DB credentials before launching MCP tooling."""
+        connection_string = self._get_chatbot_connection_string()
+        try:
+            with psycopg.connect(connection_string) as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+            logger.info("Chatbot DB credential preflight passed", **self._chatbot_db_preflight_context())
+            return True, None
+        except Exception as e:
+            context = self._chatbot_db_preflight_context()
+            logger.warning("Chatbot DB credential preflight failed", error=str(e), **context)
+            return False, str(e)
+
     async def _stream_output(self, stream: asyncio.StreamReader, name: str) -> None:
         """Stream subprocess output to logger without blocking."""
         try:
@@ -220,6 +246,17 @@ This order ensures you check the most relevant credential sources first before f
             logger.info("MCP server already running externally", url=MCP_SERVER_URL)
             self._mcp_ready.set()
             return
+
+        # Fail fast with a clear message when DB role credentials drift from .env.
+        preflight_ok, preflight_error = await asyncio.to_thread(self._validate_chatbot_db_credentials)
+        if not preflight_ok:
+            context = self._chatbot_db_preflight_context()
+            raise RuntimeError(
+                "Chatbot DB credential preflight failed. "
+                "The configured CHATBOT_DB_PASSWORD does not authenticate for chatbot_readonly. "
+                "Sync the role password in Postgres to match .env CHATBOT_DB_PASSWORD and restart agents. "
+                f"Context: {context}. Error: {preflight_error}"
+            )
 
         tools_file = Path(__file__).parent.parent / "mcp" / "tools.yaml"
         if not tools_file.exists():
