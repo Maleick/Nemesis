@@ -1,5 +1,7 @@
 """Rate limit handling for HTTP clients with Retry-After support."""
 
+import os
+
 import openai
 from agents.litellm_startup import litellm_startup
 from common.logger import get_logger
@@ -9,6 +11,7 @@ from pydantic_ai.retries import AsyncTenacityTransport, wait_retry_after
 from tenacity import AsyncRetrying, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 logger = get_logger(__name__)
+LITELLM_OPENAI_BASE_URL = os.getenv("LITELLM_OPENAI_BASE_URL", "http://litellm:4000/")
 
 
 def create_rate_limit_client():
@@ -68,10 +71,10 @@ async def get_litellm_token():
         models = []
         if litellm_token:
             try:
-                client = openai.OpenAI(base_url="http://litellm:4000/", api_key=litellm_token)
+                client = openai.OpenAI(base_url=LITELLM_OPENAI_BASE_URL, api_key=litellm_token)
                 models = [model.id for model in client.models.list().data]
             except Exception as e:
-                logger.error(f"Error initializing OpenAI client for https://litellm:4000: {e}")
+                logger.error(f"Error initializing OpenAI client for {LITELLM_OPENAI_BASE_URL}: {e}")
                 return None
 
             if models:

@@ -1,5 +1,5 @@
 import { useUser } from '@/contexts/UserContext';
-import { AlertTriangle, Bell, Bot, Calendar, Clock, Database, Edit3, Save, Trash2, User, X } from 'lucide-react';
+import { AlertTriangle, Bell, Bot, Calendar, Database, Edit3, Save, Trash2, User, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Dialog from '../ui/dialog';
 
@@ -182,6 +182,8 @@ const SettingsPage = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [spendData, setSpendData] = useState(null);
   const [spendLoading, setSpendLoading] = useState(true);
+  const [llmAuthStatus, setLlmAuthStatus] = useState(null);
+  const [llmAuthLoading, setLlmAuthLoading] = useState(true);
 
   // Fetch version information on component mount
   useEffect(() => {
@@ -334,6 +336,50 @@ const SettingsPage = () => {
 
     fetchSpendData();
   }, []);
+
+  // Fetch LLM authentication status on component mount
+  useEffect(() => {
+    let active = true;
+
+    const fetchLlmAuthStatus = async () => {
+      try {
+        const response = await fetch('/api/system/llm-auth-status');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const result = await response.json();
+        if (active) {
+          setLlmAuthStatus(result);
+        }
+      } catch (err) {
+        if (active) {
+          setLlmAuthStatus({
+            mode: 'unknown',
+            healthy: false,
+            source: 'settings-ui-fallback',
+            message: 'Failed to load LLM authentication status'
+          });
+        }
+      } finally {
+        if (active) {
+          setLlmAuthLoading(false);
+        }
+      }
+    };
+
+    fetchLlmAuthStatus();
+    const refreshInterval = window.setInterval(fetchLlmAuthStatus, 30000);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+    };
+  }, []);
+
+  const formatAuthMode = (mode) => {
+    if (!mode || typeof mode !== 'string') return 'Unknown';
+    return mode.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
 
   // Event handlers remain the same
   const handleUserSubmit = (e) => {
@@ -1075,6 +1121,56 @@ const SettingsPage = () => {
                     </div>
                     <div className="text-sm text-gray-600 dark:text-gray-400">Rule-based Agents</div>
                   </div>
+                </div>
+
+                {/* LLM Auth Status */}
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+                  <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">LLM Authentication</h3>
+                  {llmAuthLoading && !llmAuthStatus ? (
+                    <div className="flex justify-center items-center py-4">
+                      <div className="animate-spin h-6 w-6 border-2 border-blue-500 rounded-full border-t-transparent" />
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Health</span>
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            llmAuthStatus?.healthy
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}
+                        >
+                          {llmAuthStatus?.healthy ? 'Healthy' : 'Unhealthy'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">Mode</span>
+                          <span className="text-gray-900 dark:text-gray-100">{formatAuthMode(llmAuthStatus?.mode)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">Source</span>
+                          <span className="text-gray-900 dark:text-gray-100">{llmAuthStatus?.source || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">Model</span>
+                          <span className="text-gray-900 dark:text-gray-100">{llmAuthStatus?.model_name || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-500 dark:text-gray-400">Token Expiry</span>
+                          <span className="text-gray-900 dark:text-gray-100">
+                            {llmAuthStatus?.expires_at ? new Date(llmAuthStatus.expires_at).toLocaleString() : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                      {llmAuthStatus?.message && (
+                        <div className="text-xs text-gray-600 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
+                          {llmAuthStatus.message}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* LLM Usage Stats */}

@@ -5,6 +5,8 @@ to real services (Dapr, MinIO, PostgreSQL) during import.
 """
 
 from contextlib import asynccontextmanager
+import sys
+import types
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -35,6 +37,44 @@ _dapr_patch = patch("dapr.clients.DaprClient", return_value=_mock_dapr_client)
 _minio_patch = patch("minio.Minio", return_value=_mock_minio_client)
 _dapr_patch.start()
 _minio_patch.start()
+
+# In some local environments tests run without libpq present.
+# Provide a minimal psycopg stub so imports succeed.
+try:
+    import psycopg  # noqa: F401
+except Exception:
+    class _DummyConnection:
+        @classmethod
+        def __class_getitem__(cls, _item):
+            return cls
+
+    class _DummyTupleRow(tuple):
+        @classmethod
+        def __class_getitem__(cls, _item):
+            return cls
+
+    _psycopg_stub = types.ModuleType("psycopg")
+    _psycopg_stub.Connection = _DummyConnection
+    _psycopg_stub.connect = lambda *args, **kwargs: None
+    _rows_stub = types.ModuleType("psycopg.rows")
+    _rows_stub.TupleRow = _DummyTupleRow
+    _pool_stub = types.ModuleType("psycopg_pool")
+
+    class _DummyConnectionPool:
+        @classmethod
+        def __class_getitem__(cls, _item):
+            return cls
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def connection(self):
+            raise RuntimeError("ConnectionPool stub does not provide database connections in tests")
+
+    _pool_stub.ConnectionPool = _DummyConnectionPool
+    sys.modules.setdefault("psycopg", _psycopg_stub)
+    sys.modules.setdefault("psycopg.rows", _rows_stub)
+    sys.modules.setdefault("psycopg_pool", _pool_stub)
 
 # Also need to clear the lru_cache on get_postgres_connection_str in case it was cached
 # from a real call (shouldn't happen in tests, but safety measure)

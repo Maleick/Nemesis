@@ -1558,6 +1558,67 @@ async def get_available_services():
 
 
 @app.get(
+    "/system/llm-auth-status",
+    tags=["system"],
+    summary="Get LLM authentication status",
+    description="Return secret-safe runtime LLM authentication mode and health metadata",
+)
+async def get_llm_auth_status():
+    default_mode = os.getenv("LLM_AUTH_MODE", "official_key")
+    fallback_payload = {
+        "mode": default_mode,
+        "healthy": False,
+        "available": False,
+        "source": "web-api-fallback",
+        "message": "Agents service unavailable",
+        "model_name": None,
+        "base_url": None,
+        "expires_at": None,
+        "expires_in_seconds": None,
+    }
+
+    try:
+        url = f"http://localhost:{DAPR_PORT}/v1.0/invoke/agents/method/agents/auth-status"
+        response = requests.get(url, timeout=10)
+        if response.status_code != 200:
+            logger.warning("Unexpected status from agents auth endpoint", status_code=response.status_code)
+            return {
+                **fallback_payload,
+                "message": f"Agents auth endpoint returned {response.status_code}",
+            }
+
+        payload = response.json()
+        if not isinstance(payload, dict):
+            logger.warning("Unexpected payload type from agents auth endpoint", payload_type=type(payload).__name__)
+            return {
+                **fallback_payload,
+                "message": "Agents auth endpoint returned non-object payload",
+            }
+
+        payload.setdefault("mode", default_mode)
+        payload.setdefault("source", "agents")
+        return payload
+    except requests.Timeout:
+        logger.warning("Timeout retrieving LLM auth status from agents service")
+        return {
+            **fallback_payload,
+            "message": "Timeout retrieving LLM auth status from agents service",
+        }
+    except requests.RequestException as e:
+        logger.warning("Failed retrieving LLM auth status from agents service", error=str(e))
+        return {
+            **fallback_payload,
+            "message": "Failed retrieving LLM auth status from agents service",
+        }
+    except Exception as e:
+        logger.exception("Unexpected error retrieving LLM auth status", error=str(e))
+        return {
+            **fallback_payload,
+            "message": "Unexpected error retrieving LLM auth status",
+        }
+
+
+@app.get(
     "/system/container-monitor/status",
     tags=["system"],
     summary="Container monitor status",

@@ -8,7 +8,8 @@ from datetime import datetime
 import asyncpg
 import structlog
 from agents.agent_manager import agent_manager
-from agents.helpers import check_triage_consensus, fetch_finding_details, get_litellm_token
+from agents.auth_provider import resolve_llm_auth
+from agents.helpers import check_triage_consensus, fetch_finding_details
 from agents.model_manager import ModelManager
 from agents.phoenix_cost_sync import sync_pricing_to_phoenix
 from agents.prompt_manager import PromptManager
@@ -57,9 +58,9 @@ async def lifespan(app: FastAPI):
     """Lifespan manager for FastAPI - handles startup and shutdown events"""
     global workflow_runtime, workflow_client, litellm_model
     try:
-        # setup the LiteLLM connection/token (if available)
-        litellm_token = await get_litellm_token()
-        logger.debug(f"LiteLLM token: {litellm_token}")
+        # Resolve runtime LLM auth mode/token (if available)
+        llm_auth = await resolve_llm_auth()
+        litellm_model = llm_auth.model_name
 
         # Initialize OpenTelemetry tracer provider first (needed for Phoenix)
         from agents.logger import get_tracer
@@ -67,15 +68,29 @@ async def lifespan(app: FastAPI):
         _tracer = get_tracer("agents")  # noqa: F841
         logger.debug("OpenTelemetry tracer initialized")
 
-        # Initialize ModelManager if we have a model
-        #   this is so we can pull the custom pricing and sync it back to Phoenix for tracking
-        if litellm_token:
-            ModelManager.initialize(litellm_token, litellm_model)
-            logger.info("ModelManager initialized", litellm_model=litellm_model, litellm_token=litellm_token)
+        # Initialize ModelManager and pricing sync when auth is healthy
+        logger.info(
+            "Resolved LLM authentication mode",
+            mode=llm_auth.mode.value,
+            healthy=llm_auth.healthy,
+            source=llm_auth.source,
+            model_name=llm_auth.model_name,
+        )
 
-            # Sync model pricing to Phoenix if we can reach LiteLLM and have Phoenix DB configured
+        if llm_auth.token and llm_auth.healthy:
+            ModelManager.initialize(
+                token=llm_auth.token,
+                model_name=llm_auth.model_name,
+                base_url=llm_auth.base_url,
+                auth_mode=llm_auth.mode.value,
+                auth_source=llm_auth.source,
+                auth_message=llm_auth.message,
+                token_expires_at=llm_auth.expires_at,
+            )
+
+            # Sync model pricing to Phoenix only for the official LiteLLM path
             phoenix_db_url = os.getenv("PHOENIX_SQL_DATABASE_URL")
-            if phoenix_db_url:
+            if phoenix_db_url and llm_auth.mode.value == "official_key":
                 try:
                     pricing_synced = await sync_pricing_to_phoenix(litellm_model)
                     if pricing_synced:
@@ -86,6 +101,16 @@ async def lifespan(app: FastAPI):
                         )
                 except Exception as e:
                     logger.debug(f"Could not sync pricing to Phoenix: {e}")
+        else:
+            ModelManager.mark_unavailable(
+                auth_mode=llm_auth.mode.value,
+                message=llm_auth.message,
+                model_name=llm_auth.model_name,
+                base_url=llm_auth.base_url,
+                auth_source=llm_auth.source,
+                token_expires_at=llm_auth.expires_at,
+            )
+            logger.warning("LLM model unavailable", auth_mode=llm_auth.mode.value, reason=llm_auth.message)
 
         # Initialize PromptManager
         PromptManager.initialize()
@@ -518,6 +543,22 @@ async def get_agents_metadata():
         return {"agents": [], "total_count": 0, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 
+@app.get("/agents/auth-status")
+async def get_llm_auth_status():
+    """Get secret-safe runtime LLM auth status metadata."""
+    try:
+        return ModelManager.get_auth_status()
+    except Exception as e:
+        logger.exception(message="Error getting LLM auth status")
+        return {
+            "mode": "unknown",
+            "healthy": False,
+            "available": False,
+            "message": str(e),
+            "timestamp": datetime.now().isoformat(),
+        }
+
+
 @app.get("/agents/spend-data")
 async def get_llm_spend_data():
     """Get LiteLLM spend and token usage data."""
@@ -539,9 +580,6 @@ async def get_llm_spend_data():
                 FROM "LiteLLM_SpendLogs"
             """
             result = await conn.fetchrow(query)
-            import pprint
-
-            pprint.pprint(result)
 
             return {
                 "total_spend": float(result["total_spend"]),
