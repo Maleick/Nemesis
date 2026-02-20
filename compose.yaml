@@ -34,6 +34,7 @@ services:
       - DAPR_GRPC_PORT=50001
       - DAPR_HTTP_PORT=3500
       - DEFAULT_EXPIRATION_DAYS=${DEFAULT_EXPIRATION_DAYS:-100}
+      - LLM_AUTH_MODE=${LLM_AUTH_MODE:-official_key}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
       - ${MOUNTED_CONTAINER_PATH:-empty-mounted-containers}:/mounted-containers
@@ -1074,9 +1075,17 @@ services:
       - NEMESIS_MONITORING=${NEMESIS_MONITORING:-disabled}
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4317
       - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT_INSECURE=true
+      - LLM_AUTH_MODE=${LLM_AUTH_MODE:-official_key}
+      - CODEX_AUTH_PROFILE_PATH=${CODEX_AUTH_PROFILE_PATH:-/run/secrets/codex-auth-profile.json}
+      - CODEX_AUTH_PROFILE_NAME=${CODEX_AUTH_PROFILE_NAME:-openai-codex:default}
+      - CODEX_AUTH_EXPERIMENTAL=${CODEX_AUTH_EXPERIMENTAL:-false}
+      - CODEX_CLIENT_VERSION=${CODEX_CLIENT_VERSION:-0.104.0}
+      - CODEX_DEFAULT_INSTRUCTIONS=${CODEX_DEFAULT_INSTRUCTIONS:-Follow the provided system and user messages and use tools when needed.}
       # Chatbot configuration
       - CHATBOT_DB_PASSWORD=${CHATBOT_DB_PASSWORD:-chatbot_pass_change_me}
       - MCP_MAX_RESULTS=${MCP_MAX_RESULTS:-100}
+    volumes:
+      - ${CODEX_AUTH_PROFILE_MOUNT_SOURCE:-./infra/litellm/codex-auth-profile.placeholder.json}:${CODEX_AUTH_PROFILE_PATH:-/run/secrets/codex-auth-profile.json}:ro
     logging: *logging-config
     depends_on:
       postgres: { condition: service_healthy }
@@ -1156,6 +1165,7 @@ services:
       - SERVER_ROOT_PATH=/llm
       - PROXY_BASE_URL=${NEMESIS_URL:?}
       - UI_BASE_PATH=/llm/ui
+      - LLM_AUTH_MODE=${LLM_AUTH_MODE:-official_key}
     volumes:
       - ./infra/litellm/config.yml:/app/config.yml:ro
     command: ["--config", "/app/config.yml"]
@@ -1165,7 +1175,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "python3 -c \"import urllib.request,json; r=urllib.request.urlopen(urllib.request.Request('http://localhost:4000/health',headers={'Authorization':'Bearer sk-${LITELLM_ADMIN_PASSWORD:-admin123}'})); d=json.load(r); exit(0 if d.get('healthy_count',0)>0 and d.get('unhealthy_count',0)==0 else 1)\"",
+          "python3 -c \"import json,os,urllib.request; mode=os.getenv('LLM_AUTH_MODE','official_key').strip().lower(); hdr={'Authorization':'Bearer sk-${LITELLM_ADMIN_PASSWORD:-admin123}'}; path='/health/readiness' if mode=='codex_oauth' else '/health'; req=urllib.request.Request('http://localhost:4000'+path, headers=hdr); resp=urllib.request.urlopen(req); data=json.load(resp); ok=(data.get('status')=='connected') if mode=='codex_oauth' else (data.get('healthy_count',0)>0 and data.get('unhealthy_count',0)==0); exit(0 if ok else 1)\"",
         ]
       interval: 30s
       timeout: 10s

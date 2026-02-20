@@ -18,9 +18,32 @@ Nemesis currently has the following agents:
 
 ## Setup
 
-In order to enable any LLM-powered agents, you first need to configure one or more models in `./infra/litellm/config.yaml` . You can use any model provider that LiteLLM supports (more details [here](https://docs.litellm.ai/docs/proxy/configs)) - **ensure that at a minimum you have a model called "default"**. In the `agents` section of `./compose.yaml` you can adjust the MAX_BUDGET (default $100) and BUDGET_DURATION (default 30d) enrivonment variables as wanted. Then launch the "llm" profile for Nemesis by supplying `--llm` to the `./tools/nemesis-ctl.sh` script.
+Nemesis supports two LLM auth modes for agents:
 
-***Note:*** service keys/tokens/etc. should be configured in your .env file and can be used in `./infra/litellm/config.yaml` as demonstrated in the current config file.
+1. `official_key` (default): uses LiteLLM model routing and provider credentials.
+2. `codex_oauth` (experimental): uses a Codex OAuth profile/token for agent model calls.
+
+To enable LLM-powered agents, launch Nemesis with the `--llm` profile:
+
+```bash
+./tools/nemesis-ctl.sh start prod --llm
+```
+
+### `official_key` mode
+
+When `LLM_AUTH_MODE=official_key`, configure one or more models in `./infra/litellm/config.yml` and provide the provider credentials (for example, Bedrock/OpenAI/etc.) in `.env`. Ensure that at least one LiteLLM model is named `default`. You can adjust `MAX_BUDGET` (default `$100`) and `BUDGET_DURATION` (default `30d`) in the `agents` service environment.
+
+### `codex_oauth` mode
+
+When `LLM_AUTH_MODE=codex_oauth`, agents use the Codex OAuth token/profile path instead of provider API keys. In this mode, missing Bedrock credentials should not block agents startup. LiteLLM health checks use readiness checks for `codex_oauth`, while `official_key` retains strict model health checks.
+
+To switch back to fallback mode safely:
+
+1. Set `LLM_AUTH_MODE=official_key` in `.env`.
+2. Ensure provider credentials and `./infra/litellm/config.yml` model settings are valid.
+3. Restart with the same profile flags you used previously (including `--llm`).
+
+***Note:*** service keys/tokens/etc. should be configured in your `.env` file and can be referenced in `./infra/litellm/config.yml`.
 
 ## Agent Settings
 

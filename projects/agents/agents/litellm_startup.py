@@ -27,6 +27,15 @@ RETRY_DELAY = 5
 TOKEN_KEY = "litellm_token"
 
 
+def _redact_secret(secret: str | None) -> str:
+    """Return a short redacted representation suitable for logs."""
+    if not secret:
+        return "<empty>"
+    if len(secret) <= 8:
+        return "***"
+    return f"{secret[:4]}...{secret[-4:]}"
+
+
 async def wait_for_litellm() -> bool:
     """Wait for LiteLLM API to be available"""
     logger.debug("Checking LiteLLM API availability...")
@@ -199,7 +208,7 @@ async def litellm_startup() -> str:
             logger.info("Using existing token from Dapr state store")
             logger.info(f"User: {LLM_EMAIL}")
             logger.info(f"Budget: ${MAX_BUDGET}")
-            logger.info(f"Token: {existing_token}")
+            logger.info("Token loaded", token_hint=_redact_secret(existing_token))
             return existing_token
         else:
             logger.warning("Existing token is invalid, creating new one...")
@@ -222,6 +231,6 @@ async def litellm_startup() -> str:
     logger.info("Budget-limited token provisioned successfully!")
     logger.info(f"User: {LLM_EMAIL}")
     logger.info(f"Budget: ${MAX_BUDGET}")
-    logger.info(f"Token: {new_token}")
+    logger.info("Token provisioned", token_hint=_redact_secret(new_token))
 
     return new_token
