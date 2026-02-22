@@ -728,7 +728,7 @@ class TestFormatLsaSecretsText:
         assert "User Key: ccdd" in text
 
     def test_hex_blob_truncated(self, analyzer):
-        long_hex = "ab" * 100  # 200 hex chars = 100 bytes
+        long_hex = "ab" * 101  # 202 hex chars = 101 bytes (> truncation threshold)
         secrets = [
             {
                 "name": "NK$LM",
@@ -742,7 +742,7 @@ class TestFormatLsaSecretsText:
         text = "\n".join(lines)
         assert "NK$LM:" in text
         assert "..." in text
-        assert "(100 bytes)" in text
+        assert "(101 bytes)" in text
 
     def test_hex_blob_short_not_truncated(self, analyzer):
         short_hex = "abcdef1234"
@@ -864,7 +864,7 @@ class TestFormatLsaSecretsMarkdown:
         assert "**User Key**: `ccdd`" in md
 
     def test_hex_blob_truncated(self, analyzer):
-        long_hex = "ab" * 100
+        long_hex = "ab" * 101  # 202 hex chars = 101 bytes (> truncation threshold)
         secrets = [
             {
                 "name": "NK$LM",
@@ -876,7 +876,7 @@ class TestFormatLsaSecretsMarkdown:
         ]
         md = analyzer._format_lsa_secrets_markdown(secrets)
         assert "### NK$LM" in md
-        assert "(100 bytes)" in md
+        assert "(101 bytes)" in md
 
     def test_generic_encrypted_secret(self, analyzer):
         secrets = [
