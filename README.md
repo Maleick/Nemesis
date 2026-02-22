@@ -42,6 +42,23 @@ See the [Nemesis Usage Guide](docs/usage_guide.md).
 
 ## Operational Notes
 
+### LLM provider authentication options (Codex + Gemini)
+
+When the `--llm` profile is enabled, Nemesis routes model calls through LiteLLM (`infra/litellm/config.yml`).
+For both Codex and Gemini, you can choose either interactive OAuth credentials or non-interactive credentials for automation.
+
+| Provider | Auth option | Best for | Notes |
+| --- | --- | --- | --- |
+| Codex (OpenAI via LiteLLM) | OAuth user/session token | Local interactive testing | Fast to get started for personal/dev usage; token refresh can be required. |
+| Codex (OpenAI via LiteLLM) | API key or service credential | CI, servers, unattended runs | Recommended for stability in automation and scheduled jobs. |
+| Gemini (Google via LiteLLM) | OAuth user/session token | Local interactive testing | Useful for developer workflows; avoid for unattended runtime. |
+| Gemini (Google via LiteLLM) | API key or service credential | CI, servers, unattended runs | Recommended for fork CI and long-running deployments. |
+
+Credential handling guidance:
+- Store secrets in `.env` (gitignored) or your runtime secret manager, never in git-tracked files.
+- Reference those secrets from `infra/litellm/config.yml`.
+- Keep at least one configured model named `default` for agents.
+
 ### Chatbot MCP credential preflight
 
 When the `--llm` profile is enabled, the `agents` service starts the chatbot MCP server (`genai-toolbox`) at startup.
