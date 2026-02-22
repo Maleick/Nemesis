@@ -59,6 +59,77 @@ Credential handling guidance:
 - Reference those secrets from `infra/litellm/config.yml`.
 - Keep at least one configured model named `default` for agents.
 
+#### Quick switch snippets (Codex vs Gemini)
+
+Choose one mode at a time, then restart with `./tools/nemesis-ctl.sh start prod --llm`.
+
+Codex OAuth mode (`.env`):
+
+```dotenv
+LLM_AUTH_MODE=codex_oauth
+CODEX_AUTH_EXPERIMENTAL=true
+CODEX_AUTH_PROFILE_MOUNT_SOURCE=$HOME/.codex/auth.json
+CODEX_AUTH_PROFILE_PATH=/run/secrets/codex-auth-profile.json
+CODEX_AUTH_PROFILE_NAME=openai-codex:default
+```
+
+Gemini via Google AI Studio (`.env`):
+
+```dotenv
+LLM_AUTH_MODE=official_key
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+Gemini via Google AI Studio (`compose.yaml`, `litellm.environment` add):
+
+```yaml
+- GEMINI_API_KEY=${GEMINI_API_KEY:-}
+```
+
+Gemini via Google AI Studio (`infra/litellm/config.yml`, set `default`):
+
+```yaml
+model_list:
+  - model_name: default
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+```
+
+Gemini via Vertex AI (`.env`):
+
+```dotenv
+LLM_AUTH_MODE=official_key
+VERTEX_PROJECT=your-gcp-project-id
+VERTEX_LOCATION=us-central1
+VERTEX_CREDENTIALS_FILE=/absolute/path/to/service-account.json
+```
+
+Gemini via Vertex AI (`compose.yaml`, `litellm.environment` add):
+
+```yaml
+- VERTEX_PROJECT=${VERTEX_PROJECT:-}
+- VERTEX_LOCATION=${VERTEX_LOCATION:-}
+```
+
+Gemini via Vertex AI (`compose.yaml`, `litellm.volumes` add):
+
+```yaml
+- ${VERTEX_CREDENTIALS_FILE}:/run/secrets/vertex-service-account.json:ro
+```
+
+Gemini via Vertex AI (`infra/litellm/config.yml`, set `default`):
+
+```yaml
+model_list:
+  - model_name: default
+    litellm_params:
+      model: vertex_ai/gemini-2.5-pro
+      vertex_project: your-gcp-project-id
+      vertex_location: us-central1
+      vertex_credentials: /run/secrets/vertex-service-account.json
+```
+
 ### Chatbot MCP credential preflight
 
 When the `--llm` profile is enabled, the `agents` service starts the chatbot MCP server (`genai-toolbox`) at startup.
