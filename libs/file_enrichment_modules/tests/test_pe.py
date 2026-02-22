@@ -1,5 +1,6 @@
 # pyright: reportAttributeAccessIssue=false
 import os
+import tempfile
 from unittest.mock import MagicMock, patch
 
 import lief
@@ -77,9 +78,16 @@ class TestPEAnalyzerPythonPacked:
         assert is_packed is False, "Should not detect normal PE as Python-packed"
 
     @patch("file_enrichment_modules.pe.analyzer.StorageMinio")
-    def test_unpack_python_pe_extracts_files(self, mock_storage_class):
+    def test_unpack_python_pe_extracts_files(self, mock_storage_class, tmp_path, monkeypatch):
         """Test that _unpack_python_pe extracts Python files from PyInstaller executable."""
         mock_storage_class.return_value = MagicMock()
+
+        # pydecipher validates writability of the parent output dir; force a known-writable
+        # temp root for CI environments where /tmp permission checks can be inconsistent.
+        tmp_root = tmp_path / "pydecipher_tmp"
+        tmp_root.mkdir()
+        monkeypatch.setenv("TMPDIR", str(tmp_root))
+        monkeypatch.setattr(tempfile, "tempdir", None)
 
         test_file = os.path.join(FIXTURES_DIR, "pyinstaller_packed.exe")
         assert os.path.exists(test_file), f"Test file not found: {test_file}"
