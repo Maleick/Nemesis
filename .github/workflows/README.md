@@ -2,6 +2,41 @@
 
 This directory contains GitHub Action workflows for automating tasks related to the Nemesis project.
 
+## CI Fast Gate Workflow
+
+The `ci-fast.yml` workflow is the required pull request quality gate for Python projects.
+
+### Workflow Trigger
+
+The workflow runs on:
+- Pull requests targeting `main` (excluding docs-only changes)
+- Manual triggers via the GitHub Actions UI (`workflow_dispatch`)
+
+### What It Does
+
+1. Installs `uv` and Python 3.13.
+2. Restores `uv` cache keyed by all `uv.lock` files.
+3. Runs dependency synchronization (`./tools/install_dev_env.sh`).
+4. Runs tests (`./tools/test.sh`).
+5. Runs non-mutating type checks (`./tools/typecheck.sh`).
+
+## Nightly Docker Validation Workflow
+
+The `docker-validate-nightly.yml` workflow validates that Nemesis images build successfully without publishing images.
+
+### Workflow Trigger
+
+The workflow runs on:
+- Daily schedule at `10:00 UTC`
+- Manual triggers via the GitHub Actions UI (`workflow_dispatch`)
+
+### What It Does
+
+1. Builds base images from `compose.base.yaml`.
+2. Builds production service images from `compose.yaml` + `compose.prod.build.yaml`.
+3. Builds the CLI production image explicitly.
+4. Executes on both `amd64` and `arm64` GitHub runners.
+
 ## Docker Build and Publish Workflow
 
 The `docker-build.yml` workflow automatically builds and publishes Docker images for all Nemesis services to the GitHub Container Registry (ghcr.io).
@@ -9,9 +44,8 @@ The `docker-build.yml` workflow automatically builds and publishes Docker images
 ### Workflow Trigger
 
 The workflow runs on:
-- Push to the `main` branch (when specific paths are modified)
-- Pull requests targeting the `main` branch (when specific paths are modified)
-- Manual triggers via the GitHub Actions UI (workflow_dispatch)
+- Pushes of release tags matching `v*.*.*`
+- Manual triggers via the GitHub Actions UI (`workflow_dispatch`)
 
 ### What It Does
 
