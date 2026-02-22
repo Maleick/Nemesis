@@ -222,12 +222,39 @@ class ModuleTestHarness:
             Configured module instance (not yet patched - use create_module for testing)
 
         Note:
-            This method does NOT apply patches. Use create_module() for actual testing.
+            This method applies the same temporary StorageMinio patches used by
+            create_module() so module __init__ paths do not reach external
+            infrastructure during local/CI test setup.
         """
-        if hasattr(module_class, "create_enrichment_module"):
-            module = module_class.create_enrichment_module()
-        else:
-            module = module_class()
+        module_name = module_class.__module__
+        patches_to_apply = [
+            patch("common.storage.StorageMinio", return_value=self.storage),
+        ]
+
+        try:
+            patches_to_apply.append(patch(f"{module_name}.StorageMinio", return_value=self.storage))
+        except Exception:
+            pass
+
+        started_patches = []
+        for p in patches_to_apply:
+            try:
+                p.start()
+                started_patches.append(p)
+            except Exception:
+                pass
+
+        try:
+            if hasattr(module_class, "create_enrichment_module"):
+                module = module_class.create_enrichment_module()
+            else:
+                module = module_class()
+        finally:
+            for p in started_patches:
+                try:
+                    p.stop()
+                except Exception:
+                    pass
 
         if hasattr(module, "storage"):
             module.storage = self.storage
