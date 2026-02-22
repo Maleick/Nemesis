@@ -27,16 +27,16 @@ jobs:
       - name: Prepare compose environment file
         run: cp env.example .env
 
-      - name: Configure local Docker builder
+      - name: Select default Docker builder
         run: |
-          docker buildx create --name nightly-local --driver docker --use || docker buildx use nightly-local
-          docker buildx inspect --bootstrap
+          docker buildx use default
+          docker buildx inspect default --bootstrap
 
       - name: Build base images
-        run: docker compose -f compose.base.yaml build --builder nightly-local
+        run: docker compose -f compose.base.yaml build --builder default
 
       - name: Build production service images
-        run: docker compose -f compose.yaml -f compose.prod.build.yaml build --builder nightly-local
+        run: docker compose -f compose.yaml -f compose.prod.build.yaml build --builder default
 
       - name: Build CLI production image
         run: docker build -f ./projects/cli/Dockerfile --target prod .
