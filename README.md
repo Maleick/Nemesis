@@ -40,6 +40,22 @@ Follow the [quickstart guide](docs/quickstart.md).
 ## Usage
 See the [Nemesis Usage Guide](docs/usage_guide.md).
 
+## CI / Build Validation
+
+Nemesis uses GitHub Actions as the source of truth for build health:
+
+- `CI Fast Gate` (`.github/workflows/ci-fast.yml`):
+  - Runs on pull requests to `main` (excluding docs-only changes) and manual dispatch.
+  - Installs dependencies with `uv`, runs tests via `./tools/test.sh`, and runs non-mutating type checks via `./tools/typecheck.sh`.
+- `Docker Validate Nightly` (`.github/workflows/docker-validate-nightly.yml`):
+  - Runs daily at `10:00 UTC` and supports manual dispatch.
+  - Performs build-only validation on both `amd64` and `arm64` runners for base images, production service images, and the CLI production image.
+
+Image publishing workflows remain separate and are intentionally unchanged:
+- `.github/workflows/docker-build.yml`
+- `.github/workflows/docker-build-base.yml`
+- `.github/workflows/docker-build-noseyparker.yml`
+
 ## Operational Notes
 
 ### LLM provider authentication options (Codex + Gemini)
@@ -129,7 +145,6 @@ model_list:
       vertex_location: us-central1
       vertex_credentials: /run/secrets/vertex-service-account.json
 ```
-
 ### Chatbot MCP credential preflight
 
 When the `--llm` profile is enabled, the `agents` service starts the chatbot MCP server (`genai-toolbox`) at startup.
