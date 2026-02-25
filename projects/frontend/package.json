@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test:smoke": "vitest run src/__tests__/app_navigation_smoke.test.jsx src/__tests__/result_view_smoke.test.jsx"
+    "test:smoke": "vitest run src/__tests__/app_navigation_smoke.test.jsx src/__tests__/result_view_smoke.test.jsx src/__tests__/observability_triage_links_smoke.test.jsx"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
