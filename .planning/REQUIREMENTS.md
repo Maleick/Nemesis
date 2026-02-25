@@ -26,7 +26,7 @@
 
 ### Quality Gates
 
-- [ ] **TEST-01**: CI includes an automated smoke test for upload -> enrichment -> retrieval critical path
+- [x] **TEST-01**: CI includes an automated smoke test for upload -> enrichment -> retrieval critical path
 - [ ] **TEST-02**: CI validates profile-aware smoke behavior for alerting and llm-dependent service paths
 - [ ] **TEST-03**: Frontend critical navigation and result-view workflow is covered by automated smoke checks
 - [ ] **TEST-04**: Contract tests enforce queue/topic/payload compatibility for producer-consumer boundaries
@@ -76,7 +76,7 @@
 | SEC-01 | Phase 3 | Complete |
 | SEC-02 | Phase 3 | Complete |
 | SEC-03 | Phase 3 | Complete |
-| TEST-01 | Phase 4 | Pending |
+| TEST-01 | Phase 4 | Complete |
 | TEST-02 | Phase 4 | Pending |
 | TEST-03 | Phase 4 | Pending |
 | TEST-04 | Phase 4 | Pending |
