@@ -93,3 +93,21 @@ def test_start_mcp_server_fails_fast_on_preflight_error(monkeypatch: pytest.Monk
 
     with pytest.raises(RuntimeError, match="Chatbot DB credential preflight failed"):
         asyncio.run(agent.start_mcp_server())
+
+
+def test_start_mcp_server_preflight_error_does_not_leak_password(monkeypatch: pytest.MonkeyPatch):
+    agent = _build_chatbot_agent(monkeypatch)
+
+    async def _unhealthy_mcp() -> bool:
+        return False
+
+    monkeypatch.setenv("CHATBOT_DB_PASSWORD", "top-secret-value")
+    monkeypatch.setattr(agent, "_check_mcp_health", _unhealthy_mcp)
+    monkeypatch.setattr(agent, "_validate_chatbot_db_credentials", lambda: (False, "password authentication failed"))
+
+    with pytest.raises(RuntimeError) as exc_info:
+        asyncio.run(agent.start_mcp_server())
+
+    message = str(exc_info.value)
+    assert "CHATBOT_DB_PASSWORD" in message
+    assert "top-secret-value" not in message
