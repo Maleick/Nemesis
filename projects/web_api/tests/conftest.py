@@ -97,6 +97,7 @@ def mock_storage():
     """Provide the mocked storage instance with sensible defaults for download tests."""
     mock = MagicMock()
     mock.check_file_exists.return_value = True
+    mock.upload_uploadfile.return_value = "00000000-0000-0000-0000-000000000001"
     stats = MagicMock()
     stats.size = 10 * 1024 * 1024  # 10MB
     mock.get_object_stats.return_value = stats
