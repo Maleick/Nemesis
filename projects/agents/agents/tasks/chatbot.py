@@ -14,6 +14,7 @@ from agents.logger import set_agent_metadata
 from agents.model_manager import ModelManager
 from agents.prompt_manager import PromptManager
 from common.db import get_postgres_connection_str
+from common.logger import sanitize_exception_message
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -116,7 +117,7 @@ This order ensures you check the most relevant credential sources first before f
                 return self.system_prompt
 
         except Exception as e:
-            logger.warning("Error managing prompt, using default", agent_name=self.name, error=str(e))
+            logger.warning("Error managing prompt, using default", agent_name=self.name, error=sanitize_exception_message(e))
             return self.system_prompt
 
     def execute(self, ctx, activity_input: dict) -> dict:
@@ -164,8 +165,42 @@ This order ensures you check the most relevant credential sources first before f
             return True, None
         except Exception as e:
             context = self._chatbot_db_preflight_context()
-            logger.warning("Chatbot DB credential preflight failed", error=str(e), **context)
-            return False, str(e)
+            failure_code, failure_detail = self._classify_chatbot_db_preflight_error(e)
+            logger.warning(
+                "Chatbot DB credential preflight failed",
+                failure_code=failure_code,
+                detail=failure_detail,
+                error=sanitize_exception_message(e),
+                **context,
+            )
+            return False, f"{failure_code}:{failure_detail}"
+
+    def _classify_chatbot_db_preflight_error(self, error: Exception) -> tuple[str, str]:
+        message = str(error).lower()
+        if any(
+            marker in message
+            for marker in (
+                "password authentication failed",
+                "authentication failed",
+                "invalid password",
+            )
+        ):
+            return "auth_failed", "Database credentials were rejected for chatbot_readonly"
+
+        if any(
+            marker in message
+            for marker in (
+                "connection refused",
+                "could not connect",
+                "name or service not known",
+                "timed out",
+                "timeout",
+                "network is unreachable",
+            )
+        ):
+            return "connectivity_failed", "Unable to reach the configured Postgres endpoint"
+
+        return "unknown_failure", "Unable to validate chatbot DB credentials"
 
     async def _stream_output(self, stream: asyncio.StreamReader, name: str) -> None:
         """Stream subprocess output to logger without blocking."""
@@ -176,11 +211,11 @@ This order ensures you check the most relevant credential sources first before f
                     break
                 decoded = line.decode().rstrip()
                 if decoded:
-                    logger.debug(f"MCP server {name}", output=decoded)
+                    logger.debug("MCP server output", stream=name, output=decoded)
         except asyncio.CancelledError:
             pass
         except Exception as e:
-            logger.warning(f"Error reading MCP server {name}", error=str(e))
+            logger.warning("Error reading MCP server output", stream=name, error=sanitize_exception_message(e))
 
     async def _check_mcp_health(self) -> bool:
         """Check if the MCP server is responding to requests."""
@@ -196,7 +231,7 @@ This order ensures you check the most relevant credential sources first before f
         except httpx.TimeoutException:
             return False
         except Exception as e:
-            logger.debug("MCP health check failed", error=str(e))
+            logger.debug("MCP health check failed", error=sanitize_exception_message(e))
             return False
 
     async def _wait_for_mcp_ready(self) -> bool:
@@ -251,11 +286,15 @@ This order ensures you check the most relevant credential sources first before f
         preflight_ok, preflight_error = await asyncio.to_thread(self._validate_chatbot_db_credentials)
         if not preflight_ok:
             context = self._chatbot_db_preflight_context()
+            failure_code = "unknown_failure"
+            if preflight_error and ":" in preflight_error:
+                failure_code = preflight_error.split(":", 1)[0]
             raise RuntimeError(
                 "Chatbot DB credential preflight failed. "
-                "The configured CHATBOT_DB_PASSWORD does not authenticate for chatbot_readonly. "
+                f"Reason: {failure_code}. "
+                "The configured CHATBOT_DB_PASSWORD did not pass chatbot_readonly validation. "
                 "Sync the role password in Postgres to match .env CHATBOT_DB_PASSWORD and restart agents. "
-                f"Context: {context}. Error: {preflight_error}"
+                f"Context: {context}."
             )
 
         tools_file = Path(__file__).parent.parent / "mcp" / "tools.yaml"
@@ -327,7 +366,7 @@ This order ensures you check the most relevant credential sources first before f
             raise RuntimeError("Permission denied when starting genai-toolbox. Check file permissions.") from e
         except Exception as e:
             await self.stop_mcp_server()
-            raise RuntimeError(f"Failed to start MCP server: {e}") from e
+            raise RuntimeError(f"Failed to start MCP server: {sanitize_exception_message(e)}") from e
 
     async def stop_mcp_server(self) -> None:
         """Stop the MCP server subprocess gracefully.
@@ -349,7 +388,7 @@ This order ensures you check the most relevant credential sources first before f
                 except (TimeoutError, asyncio.CancelledError):
                     pass
                 except Exception as e:
-                    logger.debug(f"Error cancelling {name} task", error=str(e))
+                    logger.debug("Error cancelling MCP output task", task=name, error=sanitize_exception_message(e))
 
         self._mcp_stdout_task = None
         self._mcp_stderr_task = None
@@ -377,7 +416,7 @@ This order ensures you check the most relevant credential sources first before f
         except ProcessLookupError:
             logger.debug("MCP process already terminated")
         except Exception as e:
-            logger.warning("Error stopping MCP server", error=str(e))
+            logger.warning("Error stopping MCP server", error=sanitize_exception_message(e))
         finally:
             self._mcp_process = None
 
@@ -522,8 +561,9 @@ This order ensures you check the most relevant credential sources first before f
             )
 
         except Exception as e:
-            logger.error("Chatbot streaming failed", error=str(e))
-            yield f"\n\n[Error: {str(e)}]"
+            safe_error = sanitize_exception_message(e)
+            logger.error("Chatbot streaming failed", error=safe_error)
+            yield f"\n\n[Error: {safe_error}]"
 
 
 # Global chatbot agent instance
@@ -557,8 +597,9 @@ async def chatbot_stream(request: ChatbotRequest) -> StreamingResponse:
     try:
         await agent.ensure_mcp_ready()
     except RuntimeError as e:
-        logger.error("MCP server not available", error=str(e))
-        raise HTTPException(status_code=503, detail=f"MCP server unavailable: {e}") from e
+        safe_error = sanitize_exception_message(e)
+        logger.error("MCP server not available", error=safe_error)
+        raise HTTPException(status_code=503, detail=f"MCP server unavailable: {safe_error}") from e
 
     # Stream the response (connects to MCP server via HTTP)
     return StreamingResponse(

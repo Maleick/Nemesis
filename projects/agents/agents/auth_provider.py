@@ -159,7 +159,25 @@ class LLMAuthResolution:
 
 
 async def resolve_llm_auth() -> LLMAuthResolution:
-    mode, mode_fallback = LLMAuthMode.parse(os.getenv("LLM_AUTH_MODE"))
+    raw_mode = os.getenv("LLM_AUTH_MODE")
+    mode, mode_fallback = LLMAuthMode.parse(raw_mode)
+
+    # If the env var is present but invalid/empty, surface deterministic unhealthy status
+    # instead of silently proceeding with fallback auth behavior.
+    if mode_fallback or (raw_mode is not None and not raw_mode.strip()):
+        configured_mode = raw_mode.strip() if raw_mode and raw_mode.strip() else "<empty>"
+        return LLMAuthResolution(
+            mode=LLMAuthMode.OFFICIAL_KEY,
+            token=None,
+            model_name=os.getenv("LITELLM_MODEL_NAME", "default"),
+            base_url=os.getenv("LITELLM_OPENAI_BASE_URL", "http://litellm:4000/"),
+            healthy=False,
+            message=(
+                f"Unsupported LLM_AUTH_MODE '{configured_mode}'. "
+                "Set LLM_AUTH_MODE to 'official_key' or 'codex_oauth'."
+            ),
+            source="llm_auth_mode",
+        )
 
     if mode == LLMAuthMode.OFFICIAL_KEY:
         return await _resolve_official_key(mode_fallback)

@@ -6,6 +6,7 @@ import structlog
 from agents.codex_oauth_model import CodexOAuthResponsesModel
 from agents.helpers import create_rate_limit_client
 from agents.logger import setup_phoenix_llm_tracing
+from common.logger import sanitize_exception_message
 from pydantic_ai.models import Model
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -132,7 +133,12 @@ class ModelManager:
 
                 logger.info("Created model instance", model_name=cls._model_name, auth_mode=cls._auth_mode)
             except Exception as e:
-                logger.error(f"Failed to create model: {e}")
+                logger.error(
+                    "Failed to create model",
+                    auth_mode=cls._auth_mode,
+                    model_name=cls._model_name,
+                    error=sanitize_exception_message(e),
+                )
                 return None
 
         return cls._model

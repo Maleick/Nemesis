@@ -29,6 +29,34 @@ def test_llm_auth_status_returns_agents_payload(client, monkeypatch):
     assert payload["source"] == "agents"
 
 
+def test_llm_auth_status_invalid_mode_forces_unhealthy_payload(client, monkeypatch):
+    class DummyResponse:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "mode": "codex_oauth",
+                "healthy": True,
+                "available": True,
+                "source": "agents",
+                "message": "ok",
+                "model_name": "gpt-5.3-codex-spark",
+                "base_url": "https://chatgpt.com/backend-api/codex",
+            }
+
+    monkeypatch.setenv("LLM_AUTH_MODE", "invalid-mode")
+    monkeypatch.setattr("web_api.main.requests.get", lambda *args, **kwargs: DummyResponse())
+
+    response = client.get("/system/llm-auth-status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["mode"] == "official_key"
+    assert payload["healthy"] is False
+    assert payload["available"] is False
+    assert "Unsupported LLM_AUTH_MODE" in payload["message"]
+
+
 def test_llm_auth_status_non_200_returns_fallback(client, monkeypatch):
     class DummyResponse:
         status_code = 503

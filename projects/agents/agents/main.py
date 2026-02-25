@@ -19,6 +19,7 @@ from agents.tasks.dotnet_analyzer import analyze_dotnet_assembly
 from agents.tasks.summarizer import summarize_text
 from agents.tasks.translate import translate_text
 from common.db import get_postgres_connection_str
+from common.logger import sanitize_exception_message
 from common.health_contract import (
     build_health_response,
     dependency_degraded,
@@ -52,7 +53,7 @@ workflow_runtime = WorkflowRuntime(logger_options=LoggerOptions(log_level=WORKFL
 with DaprClient() as client:
     secret = client.get_secret(store_name="nemesis-secret-store", key="HASURA_ADMIN_SECRET")
     hasura_admin_secret = secret.secret["HASURA_ADMIN_SECRET"]
-    logger.info("[agents] HASURA_ADMIN_SECRET retrieved")
+    logger.info("HASURA admin secret loaded for agents service")
 
 
 # Configuration
@@ -101,13 +102,11 @@ async def lifespan(app: FastAPI):
                 try:
                     pricing_synced = await sync_pricing_to_phoenix(litellm_model)
                     if pricing_synced:
-                        logger.info(f"Successfully synced pricing for model '{litellm_model}' to Phoenix")
+                        logger.info("Successfully synced pricing to Phoenix", model_name=litellm_model)
                     else:
-                        logger.debug(
-                            f"Could not sync pricing for model '{litellm_model}' to Phoenix (LiteLLM may be unavailable)"
-                        )
+                        logger.debug("Could not sync pricing to Phoenix", model_name=litellm_model)
                 except Exception as e:
-                    logger.debug(f"Could not sync pricing to Phoenix: {e}")
+                    logger.debug("Could not sync pricing to Phoenix", error=sanitize_exception_message(e))
         else:
             ModelManager.mark_unavailable(
                 auth_mode=llm_auth.mode.value,
@@ -154,7 +153,7 @@ async def lifespan(app: FastAPI):
             await chatbot_agent.start_mcp_server()
             logger.info("MCP server started successfully")
         except Exception as e:
-            logger.warning("Failed to start MCP server (this is optional)", error=str(e))
+            logger.warning("Failed to start MCP server (this is optional)", error=sanitize_exception_message(e))
 
     except Exception:
         logger.exception(message="Error initializing service")
@@ -174,7 +173,7 @@ async def lifespan(app: FastAPI):
             await chatbot_agent.stop_mcp_server()
             logger.info("MCP server stopped")
         except Exception as e:
-            logger.warning("Error stopping MCP server", error=str(e))
+            logger.warning("Error stopping MCP server", error=sanitize_exception_message(e))
 
         # PromptManager cleanup no longer needed with sync operations
 
@@ -184,7 +183,7 @@ async def lifespan(app: FastAPI):
             logger.info("Workflow runtime shutdown completed")
 
     except Exception as e:
-        logger.warning("Error during service shutdown", error=str(e))
+        logger.warning("Error during service shutdown", error=sanitize_exception_message(e))
 
 
 app = FastAPI(lifespan=lifespan)
@@ -561,7 +560,8 @@ async def get_llm_auth_status():
             "mode": "unknown",
             "healthy": False,
             "available": False,
-            "message": str(e),
+            "message": "Unable to compute LLM auth status",
+            "error_type": type(e).__name__,
             "timestamp": datetime.now().isoformat(),
         }
 

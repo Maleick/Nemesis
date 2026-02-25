@@ -79,7 +79,7 @@ def test_validate_chatbot_db_credentials_failure(monkeypatch: pytest.MonkeyPatch
     ok, error = agent._validate_chatbot_db_credentials()
 
     assert ok is False
-    assert "invalid password" in (error or "")
+    assert (error or "").startswith("auth_failed:")
 
 
 def test_start_mcp_server_fails_fast_on_preflight_error(monkeypatch: pytest.MonkeyPatch):
@@ -103,7 +103,11 @@ def test_start_mcp_server_preflight_error_does_not_leak_password(monkeypatch: py
 
     monkeypatch.setenv("CHATBOT_DB_PASSWORD", "top-secret-value")
     monkeypatch.setattr(agent, "_check_mcp_health", _unhealthy_mcp)
-    monkeypatch.setattr(agent, "_validate_chatbot_db_credentials", lambda: (False, "password authentication failed"))
+    monkeypatch.setattr(
+        agent,
+        "_validate_chatbot_db_credentials",
+        lambda: (False, "auth_failed:Database credentials were rejected for chatbot_readonly"),
+    )
 
     with pytest.raises(RuntimeError) as exc_info:
         asyncio.run(agent.start_mcp_server())
@@ -111,3 +115,4 @@ def test_start_mcp_server_preflight_error_does_not_leak_password(monkeypatch: py
     message = str(exc_info.value)
     assert "CHATBOT_DB_PASSWORD" in message
     assert "top-secret-value" not in message
+    assert "Reason: auth_failed" in message

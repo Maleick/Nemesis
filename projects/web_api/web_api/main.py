@@ -22,7 +22,7 @@ from common.health_contract import (
     dependency_ok,
 )
 from common.helpers import get_drive_from_path
-from common.logger import get_logger
+from common.logger import get_logger, sanitize_exception_message
 from common.models import Alert, BulkEnrichmentEvent, CloudEvent
 from common.models import File as FileModel
 from common.models2.api import (
@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
             lock_file.close()
             lock_file = None
     except Exception as e:
-        logger.exception(f"Error starting container monitor: {e}")
+        logger.exception("Error starting container monitor", error=sanitize_exception_message(e))
         if lock_file:
             lock_file.close()
             lock_file = None
@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
         if lock_file:
             lock_file.close()
     except Exception as e:
-        logger.exception(f"Error stopping container monitor: {e}")
+        logger.exception("Error stopping container monitor", error=sanitize_exception_message(e))
         if lock_file:
             try:
                 lock_file.close()
@@ -2087,13 +2087,24 @@ async def get_available_services():
     description="Return secret-safe runtime LLM authentication mode and health metadata",
 )
 async def get_llm_auth_status():
-    default_mode = os.getenv("LLM_AUTH_MODE", "official_key")
+    configured_mode = os.getenv("LLM_AUTH_MODE", "official_key").strip()
+    supported_modes = {"official_key", "codex_oauth"}
+    mode_misconfigured = configured_mode not in supported_modes
+    default_mode = configured_mode if configured_mode in supported_modes else "official_key"
+
+    config_message = None
+    if mode_misconfigured:
+        config_message = (
+            f"Unsupported LLM_AUTH_MODE '{configured_mode or '<empty>'}'. "
+            "Set LLM_AUTH_MODE to 'official_key' or 'codex_oauth'."
+        )
+
     fallback_payload = {
         "mode": default_mode,
         "healthy": False,
         "available": False,
         "source": "web-api-fallback",
-        "message": "Agents service unavailable",
+        "message": config_message or "Agents service unavailable",
         "model_name": None,
         "base_url": None,
         "expires_at": None,
@@ -2107,7 +2118,7 @@ async def get_llm_auth_status():
             logger.warning("Unexpected status from agents auth endpoint", status_code=response.status_code)
             return {
                 **fallback_payload,
-                "message": f"Agents auth endpoint returned {response.status_code}",
+                "message": config_message or f"Agents auth endpoint returned {response.status_code}",
             }
 
         payload = response.json()
@@ -2115,29 +2126,37 @@ async def get_llm_auth_status():
             logger.warning("Unexpected payload type from agents auth endpoint", payload_type=type(payload).__name__)
             return {
                 **fallback_payload,
-                "message": "Agents auth endpoint returned non-object payload",
+                "message": config_message or "Agents auth endpoint returned non-object payload",
             }
 
         payload.setdefault("mode", default_mode)
         payload.setdefault("source", "agents")
+        if mode_misconfigured:
+            payload["mode"] = default_mode
+            payload["healthy"] = False
+            payload["available"] = False
+            payload["message"] = config_message
         return payload
     except requests.Timeout:
         logger.warning("Timeout retrieving LLM auth status from agents service")
         return {
             **fallback_payload,
-            "message": "Timeout retrieving LLM auth status from agents service",
+            "message": config_message or "Timeout retrieving LLM auth status from agents service",
         }
     except requests.RequestException as e:
-        logger.warning("Failed retrieving LLM auth status from agents service", error=str(e))
+        logger.warning(
+            "Failed retrieving LLM auth status from agents service",
+            error=sanitize_exception_message(e),
+        )
         return {
             **fallback_payload,
-            "message": "Failed retrieving LLM auth status from agents service",
+            "message": config_message or "Failed retrieving LLM auth status from agents service",
         }
     except Exception as e:
-        logger.exception("Unexpected error retrieving LLM auth status", error=str(e))
+        logger.exception("Unexpected error retrieving LLM auth status", error=sanitize_exception_message(e))
         return {
             **fallback_payload,
-            "message": "Unexpected error retrieving LLM auth status",
+            "message": config_message or "Unexpected error retrieving LLM auth status",
         }
 
 
