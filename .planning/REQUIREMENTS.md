@@ -29,7 +29,7 @@
 - [x] **TEST-01**: CI includes an automated smoke test for upload -> enrichment -> retrieval critical path
 - [x] **TEST-02**: CI validates profile-aware smoke behavior for alerting and llm-dependent service paths
 - [x] **TEST-03**: Frontend critical navigation and result-view workflow is covered by automated smoke checks
-- [ ] **TEST-04**: Contract tests enforce queue/topic/payload compatibility for producer-consumer boundaries
+- [x] **TEST-04**: Contract tests enforce queue/topic/payload compatibility for producer-consumer boundaries
 
 ### Operator Experience
 
@@ -79,7 +79,7 @@
 | TEST-01 | Phase 4 | Complete |
 | TEST-02 | Phase 4 | Complete |
 | TEST-03 | Phase 4 | Complete |
-| TEST-04 | Phase 4 | Pending |
+| TEST-04 | Phase 4 | Complete |
 | OPS-01 | Phase 5 | Pending |
 | OPS-02 | Phase 5 | Pending |
 | EXT-01 | Phase 6 | Pending |
