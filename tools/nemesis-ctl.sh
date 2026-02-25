@@ -14,6 +14,7 @@ Usage: $0 <action> <environment> [options]
 
 Actions:
   start           Build (optional) and start services in the background.
+  status          Show profile-aware readiness status for core services.
   stop            Stop and remove services (containers and networks).
   clean           Stop and remove services AND delete associated data volumes.
 
@@ -30,6 +31,9 @@ Options:
 Examples:
   # Start production services with monitoring
   $0 start prod --monitoring
+
+  # Show readiness status for production services with LLM profile enabled
+  $0 status prod --llm
 
   # Stop all production services that were started with the monitoring profile
   $0 stop prod --monitoring
@@ -61,8 +65,8 @@ ENVIRONMENT=$1
 shift
 
 # Validate action
-if [[ "$ACTION" != "start" && "$ACTION" != "stop" && "$ACTION" != "clean" ]]; then
-  echo "Error: Invalid action '$ACTION'. Must be 'start', 'stop', or 'clean'." >&2
+if [[ "$ACTION" != "start" && "$ACTION" != "status" && "$ACTION" != "stop" && "$ACTION" != "clean" ]]; then
+  echo "Error: Invalid action '$ACTION'. Must be 'start', 'status', 'stop', or 'clean'." >&2
   echo "" >&2
   usage
 fi
@@ -148,8 +152,96 @@ else
   BUILD=true
 fi
 
+compose_cmd() {
+  if [ ${#CMD_PREFIX[@]} -eq 0 ]; then
+    "${DOCKER_CMD[@]}" "$@"
+  else
+    "${CMD_PREFIX[@]}" "${DOCKER_CMD[@]}" "$@"
+  fi
+}
+
+run_readiness_matrix() {
+  local -a services=("web-api" "file-enrichment" "document-conversion" "alerting")
+  local profile_flags=""
+
+  if [ "$MONITORING" = "true" ]; then
+    profile_flags="$profile_flags --monitoring"
+  fi
+  if [ "$JUPYTER" = "true" ]; then
+    profile_flags="$profile_flags --jupyter"
+  fi
+  if [ "$LLM" = "true" ]; then
+    services+=("agents")
+    profile_flags="$profile_flags --llm"
+  fi
+
+  local failures=0
+  local degraded=0
+
+  echo "--- Readiness Matrix for '$ENVIRONMENT' environment ---"
+  printf "%-22s %-12s %s\n" "Service" "Readiness" "Notes"
+  printf "%-22s %-12s %s\n" "-------" "---------" "-----"
+
+  for service in "${services[@]}"; do
+    local container_id
+    container_id="$(compose_cmd ps -q "$service" 2>/dev/null | head -n 1 || true)"
+
+    local readiness
+    local note
+    if [ -z "$container_id" ]; then
+      readiness="unhealthy"
+      note="container not running (start with: ./tools/nemesis-ctl.sh start $ENVIRONMENT$profile_flags)"
+      failures=$((failures + 1))
+    else
+      local container_state
+      container_state="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || echo "unknown")"
+
+      case "$container_state" in
+        healthy|running)
+          readiness="healthy"
+          note="ok"
+          ;;
+        starting|restarting)
+          readiness="degraded"
+          note="container is still starting"
+          degraded=$((degraded + 1))
+          ;;
+        unhealthy|exited|dead)
+          readiness="unhealthy"
+          note="inspect logs: docker compose logs $service --tail 80"
+          failures=$((failures + 1))
+          ;;
+        *)
+          readiness="degraded"
+          note="container state: $container_state"
+          degraded=$((degraded + 1))
+          ;;
+      esac
+    fi
+
+    printf "%-22s %-12s %s\n" "$service" "$readiness" "$note"
+  done
+
+  echo
+  if [ "$failures" -gt 0 ]; then
+    echo "Overall readiness: unhealthy ($failures failures, $degraded degraded)"
+    return 1
+  fi
+
+  if [ "$degraded" -gt 0 ]; then
+    echo "Overall readiness: degraded ($degraded services)"
+    return 0
+  fi
+
+  echo "Overall readiness: healthy"
+  return 0
+}
+
 # 3. Handle Action
-if [ "$ACTION" = "start" ]; then
+if [ "$ACTION" = "status" ]; then
+  run_readiness_matrix
+  exit $?
+elif [ "$ACTION" = "start" ]; then
   echo "--- Preparing to Start Services for '$ENVIRONMENT' environment ---"
 
   # Generate version.json for local builds
@@ -167,11 +259,9 @@ if [ "$ACTION" = "start" ]; then
     echo "Starting services..."
     DOCKER_CMD+=("up" "-d")
   fi
-
 elif [ "$ACTION" = "stop" ]; then
   echo "--- Preparing to Stop Services for '$ENVIRONMENT' environment ---"
   DOCKER_CMD+=("down")
-
 elif [ "$ACTION" = "clean" ]; then
   echo "--- Preparing to Clean Services and Volumes for '$ENVIRONMENT' environment ---"
   # The --volumes flag removes named volumes defined in the compose file.
@@ -181,8 +271,6 @@ fi
 # --- Execute Command ---
 echo
 echo "Running command:"
-
-# Determine the final command outside the subshell
 if [ ${#CMD_PREFIX[@]} -eq 0 ]; then
   FINAL_CMD=("${DOCKER_CMD[@]}")
 else
@@ -190,7 +278,7 @@ else
 fi
 
 (
-  set -x # This makes the shell print the exact command before executing it.
+  set -x
   "${FINAL_CMD[@]}"
 )
 

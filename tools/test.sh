@@ -1,9 +1,64 @@
 #!/usr/bin/env bash
 set -e
 
+run_readiness_contract_checks() {
+    local -a required_files=(
+        "libs/common/common/health_contract.py"
+        "libs/common/common/models2/health.py"
+    )
+    local -a contract_files=(
+        "projects/web_api/web_api/main.py"
+        "projects/file_enrichment/file_enrichment/routes/health.py"
+        "projects/document_conversion/document_conversion/routes/health.py"
+        "projects/alerting/alerting/main.py"
+        "projects/agents/agents/main.py"
+    )
+
+    local failed=0
+
+    echo "Running readiness contract guard checks..."
+    for file in "${required_files[@]}"; do
+        if [ ! -f "$BASE_DIR/$file" ]; then
+            echo "  [FAIL] Missing file: $file"
+            failed=1
+        else
+            echo "  [OK] $file"
+        fi
+    done
+
+    for file in "${contract_files[@]}"; do
+        if ! rg -q "build_health_response" "$BASE_DIR/$file"; then
+            echo "  [FAIL] Missing contract usage in: $file"
+            failed=1
+        else
+            echo "  [OK] $file"
+        fi
+    done
+
+    if [ "$failed" -ne 0 ]; then
+        echo ""
+        echo "Readiness contract checks failed."
+        exit 1
+    fi
+
+    echo ""
+    echo "Readiness contract checks passed."
+}
+
 # Get the absolute path to the project root (one level up from the tools folder)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
+
+if [ "${1:-}" = "--readiness-contract" ]; then
+    shift
+    if [ "$#" -gt 0 ]; then
+        echo "Unknown option(s): $*"
+        echo "Usage: $0 [--readiness-contract]"
+        exit 1
+    fi
+    run_readiness_contract_checks
+    exit 0
+fi
 
 # Directories to scan for Python projects with tests
 TARGET_DIRS=("$BASE_DIR/libs" "$BASE_DIR/projects")
