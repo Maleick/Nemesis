@@ -1,34 +1,78 @@
 # Deploying Nemesis with Docker Compose
 
-In general, we recommend that people use the `./tools/nemesis-ctl.sh` script to deploy Nemesis. However, more complex deployment scenarios will require understanding how to deploy Nemesis components manually using Docker Compose. The documentation below details how you can launch Nemesis in a variety
+For day-to-day operations, use `./tools/nemesis-ctl.sh` as the primary interface.
+`nemesis-ctl.sh` is the source of truth for profile-aware startup and readiness checks.
+Use raw `docker compose` commands only for advanced deployment customization.
 
-After starting services, verify profile readiness with:
+## Operator-First Profile Commands (Recommended)
+
+### Start services
 
 ```bash
-./tools/nemesis-ctl.sh status dev [--monitoring] [--jupyter] [--llm]
-./tools/nemesis-ctl.sh status prod [--monitoring] [--jupyter] [--llm]
+# Base profile
+./tools/nemesis-ctl.sh start prod
+
+# Base + monitoring + jupyter
+./tools/nemesis-ctl.sh start prod --monitoring --jupyter
+
+# Base + monitoring + jupyter + llm
+./tools/nemesis-ctl.sh start prod --monitoring --jupyter --llm
 ```
 
-`status` reports a startup matrix (`healthy` / `degraded` / `unhealthy`) for core services and provides log-recovery hints for failed dependencies.
+### Check readiness after startup
+
+Always validate readiness with the same profile flags used for startup:
+
+```bash
+./tools/nemesis-ctl.sh status prod
+./tools/nemesis-ctl.sh status prod --monitoring --jupyter --llm
+```
+
+`status` returns a matrix with `healthy` / `degraded` / `unhealthy` service states and remediation hints.
+If a required service is `unhealthy`, inspect logs before proceeding:
+
+```bash
+docker compose logs <service> --tail 80
+```
+
+### Stop or clean services
+
+Use the same profile flags that were used for `start`:
+
+```bash
+./tools/nemesis-ctl.sh stop prod --monitoring --jupyter --llm
+./tools/nemesis-ctl.sh clean prod --monitoring --jupyter --llm
+```
+
+## When to Use Raw `docker compose`
+
+Use direct `docker compose` commands only when you need behavior outside standard operational workflows, for example:
+
+- custom compose file layering
+- non-standard image tags
+- targeted low-level service debugging
+
+For all normal startup/status/stop workflows, keep using `nemesis-ctl.sh`.
 
 ## Use Published Production Docker Images
 
 ### Step 1 - Configure environment variables
+
 ```bash
 cp env.example .env
 vim .env
 ```
 
-### Step 2 - Pull and start the images
+### Step 2 - Pull and start images manually
 
-The examples below show various ways you can pull and start Nemesis.
+**Example 1: Production images (base profile only)**
 
-**Example 1: Start production images (no monitoring/jupyter)**
 ```bash
 docker compose -f compose.yaml up -d
 ```
 
-**Example 2: Start production images + monitoring**
+**Example 2: Production images + monitoring**
+
 ```bash
 NEMESIS_MONITORING=enabled \
 docker compose \
@@ -37,27 +81,29 @@ docker compose \
   up -d
 ```
 
-**Example 3: Start production images + monitoring + jupyter**
+**Example 3: Production images + monitoring + jupyter**
+
 ```bash
 NEMESIS_MONITORING=enabled \
 docker compose \
   -f compose.yaml \
-  -f compose.prod.build.yaml \
   --profile monitoring \
-  --profile jupyter
+  --profile jupyter \
   up -d
 ```
-
 
 ## Building and Using Production Images Locally
 
 ### Step 1 - Build base images
+
 ```bash
 docker compose -f compose.base.yaml build
 ```
 
-### Step 2 - Build & then start production images
-**Example 4: Build & then start production images without monitoring/jupyter**
+### Step 2 - Build and start production images
+
+**Example 4: Build and start production images without optional profiles**
+
 ```bash
 docker compose \
   -f compose.yaml \
@@ -65,7 +111,8 @@ docker compose \
   up --build -d
 ```
 
-**Example 5: Build & then start production images with monitoring**
+**Example 5: Build and start production images with monitoring**
+
 ```bash
 NEMESIS_MONITORING=enabled \
 docker compose \
@@ -75,35 +122,41 @@ docker compose \
   up --build -d
 ```
 
-
 ## Building and Using Development Images
 
-Development images are not published and must be built locally. If you make any local modifications to project code, you need to build + run the development images.
+Development images are not published and must be built locally.
+If you change source code, use `dev` mode and rebuild.
 
-The easiest method to build + run dev images is to just use the `dev` target instead of `prod` with `./tools/nemesis-ctl.sh` :
+Preferred path:
+
 ```bash
-./tools/nemesis-ctl.sh start dev [--monitoring] [--jupyter] [--llm]
-./tools/nemesis-ctl.sh status dev [--monitoring] [--jupyter] [--llm]
+./tools/nemesis-ctl.sh start dev --monitoring --jupyter --llm
+./tools/nemesis-ctl.sh status dev --monitoring --jupyter --llm
 ```
 
-### Step 1 - Configure environment variables
+### Manual dev compose path
+
+**Step 1 - Configure environment variables**
+
 ```bash
 cp env.example .env
 vim .env
 ```
 
-### Step 2 - Build base images
+**Step 2 - Build base images**
+
 ```bash
 docker compose -f compose.base.yaml build
 ```
 
-### Step 3 - Build and start dev images
-**Example 6: Build and start dev images without monitoring/jupyter (implicitly merges compose.yaml and compose.override.yaml)**
+**Step 3 - Build/start dev images (base)**
+
 ```bash
 docker compose up -d
 ```
 
-**Example 7: Build and start dev images with monitoring + jupyter**
+**Step 4 - Build/start dev images with monitoring + jupyter**
+
 ```bash
 NEMESIS_MONITORING=enabled \
 docker compose \
