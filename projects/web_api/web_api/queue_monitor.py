@@ -6,6 +6,18 @@ from typing import Any
 
 import aiohttp
 from common.logger import get_logger
+from common.queues import (
+    ALERTING_NEW_ALERT_TOPIC,
+    DOTNET_INPUT_TOPIC,
+    DOTNET_OUTPUT_TOPIC,
+    DOCUMENT_CONVERSION_INPUT_TOPIC,
+    FILES_BULK_ENRICHMENT_TASK_TOPIC,
+    FILES_NEW_FILE_TOPIC,
+    NOSEYPARKER_INPUT_TOPIC,
+    NOSEYPARKER_OUTPUT_TOPIC,
+    WORKFLOW_MONITOR_COMPLETED_TOPIC,
+    get_topic_to_queue_name_mapping,
+)
 from dapr.clients import DaprClient
 
 logger = get_logger(__name__)
@@ -14,17 +26,19 @@ logger = get_logger(__name__)
 class WorkflowQueueMonitor:
     """Provides queue metrics via RabbitMQ Management HTTP API."""
 
-    TOPIC_TO_QUEUE_MAPPING = {
-        "new_file": "files-new_file",
-        "document_conversion_input": "files-document_conversion_input",
-        "bulk_enrichment_task": "files-bulk_enrichment_task",
-        "workflow_completed": "workflow_monitor-workflow_completed",
-        "new_alert": "alerting-new_alert",
-        "dotnet_input": "dotnet-dotnet_input",
-        "dotnet_output": "dotnet-dotnet_output",
-        "noseyparker_input": "noseyparker-noseyparker_input",
-        "noseyparker_output": "noseyparker-noseyparker_output",
-    }
+    TOPIC_TO_QUEUE_MAPPING = get_topic_to_queue_name_mapping(
+        [
+            FILES_NEW_FILE_TOPIC,
+            DOCUMENT_CONVERSION_INPUT_TOPIC,
+            FILES_BULK_ENRICHMENT_TASK_TOPIC,
+            WORKFLOW_MONITOR_COMPLETED_TOPIC,
+            ALERTING_NEW_ALERT_TOPIC,
+            DOTNET_INPUT_TOPIC,
+            DOTNET_OUTPUT_TOPIC,
+            NOSEYPARKER_INPUT_TOPIC,
+            NOSEYPARKER_OUTPUT_TOPIC,
+        ]
+    )
     DEFAULT_TOPICS = list(TOPIC_TO_QUEUE_MAPPING.keys())
 
     def _resolve_queue_name(self, topic: str) -> str:
