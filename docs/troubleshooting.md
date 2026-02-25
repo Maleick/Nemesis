@@ -4,6 +4,36 @@ Nemesis has a number of services to help with assist with troubleshooting.
 
 **Note** that Grafana + Jaeger tracing are only available if you use the `--monitoring` flag when launching Nemesis!
 
+## Startup Readiness Matrix
+
+Nemesis now exposes a profile-aware startup readiness matrix through `nemesis-ctl`:
+
+```bash
+# Base profile readiness
+./tools/nemesis-ctl.sh status dev
+
+# LLM profile readiness (includes agents)
+./tools/nemesis-ctl.sh status dev --llm
+```
+
+The output reports core services (`web-api`, `file-enrichment`, `document-conversion`, `alerting`, and `agents` when `--llm` is enabled) as:
+
+- `healthy`: service is running and health checks passed
+- `degraded`: service is starting or an optional dependency (for example LLM auth) is unavailable
+- `unhealthy`: required dependency or container readiness failed
+
+If any service is `unhealthy`, use:
+
+```bash
+docker compose logs <service> --tail 80
+```
+
+Common remediation flow:
+
+1. Run `./tools/nemesis-ctl.sh status <dev|prod> [--monitoring] [--jupyter] [--llm]`
+2. Fix the first `unhealthy` service shown in the matrix
+3. Re-run status until all required services report `healthy` (or expected `degraded` for optional profile dependencies)
+
 ## Analyze Message Queues
 
 Nemesis uses message queue in its enrichment workflows. To quickly get an overview of the state of the queues, view the "Enrichment Queues" section in Nemesis's dashboard:

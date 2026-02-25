@@ -2,6 +2,15 @@
 
 In general, we recommend that people use the `./tools/nemesis-ctl.sh` script to deploy Nemesis. However, more complex deployment scenarios will require understanding how to deploy Nemesis components manually using Docker Compose. The documentation below details how you can launch Nemesis in a variety
 
+After starting services, verify profile readiness with:
+
+```bash
+./tools/nemesis-ctl.sh status dev [--monitoring] [--jupyter] [--llm]
+./tools/nemesis-ctl.sh status prod [--monitoring] [--jupyter] [--llm]
+```
+
+`status` reports a startup matrix (`healthy` / `degraded` / `unhealthy`) for core services and provides log-recovery hints for failed dependencies.
+
 ## Use Published Production Docker Images
 
 ### Step 1 - Configure environment variables
@@ -74,6 +83,7 @@ Development images are not published and must be built locally. If you make any 
 The easiest method to build + run dev images is to just use the `dev` target instead of `prod` with `./tools/nemesis-ctl.sh` :
 ```bash
 ./tools/nemesis-ctl.sh start dev [--monitoring] [--jupyter] [--llm]
+./tools/nemesis-ctl.sh status dev [--monitoring] [--jupyter] [--llm]
 ```
 
 ### Step 1 - Configure environment variables
