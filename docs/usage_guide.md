@@ -219,3 +219,13 @@ curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/e
 ```
 
 Use these endpoints alongside the Dashboard and Troubleshooting guide to trace ingestion-to-enrichment outcomes and diagnose sustained backlog/failure conditions quickly.
+
+### Backend Smoke Gate
+
+Run the backend critical-path smoke gate locally with:
+
+```bash
+./tools/test.sh --smoke-backend
+```
+
+This smoke suite validates upload submission, workflow lifecycle correlation, and retrieval/download behavior in the `web_api` service without requiring live Dapr or RabbitMQ dependencies.

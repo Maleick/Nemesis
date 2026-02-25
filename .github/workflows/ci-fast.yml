@@ -50,5 +50,8 @@ jobs:
       - name: Validate readiness contract guard
         run: ./tools/test.sh --readiness-contract
 
+      - name: Run backend smoke suite
+        run: ./tools/test.sh --smoke-backend
+
       - name: Run pyright type checks
         run: ./tools/typecheck.sh
