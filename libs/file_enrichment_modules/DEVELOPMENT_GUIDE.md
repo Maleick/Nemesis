@@ -425,6 +425,36 @@ def _analyze_file(self, file_path: str, file_enriched) -> EnrichmentResult | Non
 
 ---
 
+## Contract Compliance
+
+The checklist below maps onboarding requirements to runtime behavior in `projects/file_enrichment/file_enrichment/workflow.py` and to harness validation.
+
+| Contract Item | Why It Exists | Validation Path |
+|---------------|---------------|-----------------|
+| `create_enrichment_module()` factory | The dynamic loader instantiates modules through this exported entrypoint. | `rg -n "def create_enrichment_module" analyzer.py` |
+| `name` + `dependencies` | `build_dependency_graph()` and topological ordering require stable names/dependency references. | `rg -n "name: str|dependencies" analyzer.py` |
+| `self.workflows = ["default"]` (or explicit workflow list) | Runtime filters modules by `workflows`; missing values can cause silent non-execution. | `rg -n "workflows = \\[\"default\"\\]" analyzer.py` |
+| `should_process()` implemented | Prevents expensive processing on unsupported files and keeps execution deterministic. | `rg -n "async def should_process\\(" analyzer.py` |
+| `process()` implemented | Defines module output contract (`EnrichmentResult | None`) consumed by downstream activities. | `rg -n "async def process\\(" analyzer.py` |
+| Harness-backed tests | Ensures module behavior is validated without full infrastructure. | `uv run pytest tests/test_harness_integration.py -q` |
+
+### Contract-to-Runtime Mapping
+
+- The workflow engine loads modules and enforces dependency order before execution. If dependency names drift, runtime raises during graph build.
+- Workflow filtering uses module `workflows` lists; setting `self.workflows = ["default"]` ensures the module participates in the default enrichment pipeline.
+- `should_process()` is called prior to `process()` and should avoid side effects, because it is the primary runtime guard for applicability.
+
+### Harness Verification Expectations
+
+- Place standalone module tests under `libs/file_enrichment_modules/tests/` and use `tests.harness.ModuleTestHarness`.
+- At minimum, add tests that cover:
+  - positive and negative `should_process()` behavior
+  - successful `process()` result shape and findings/transforms expectations
+  - dependency-free execution with mocked storage and DB via the test_harness
+- Keep `tests/test_harness_integration.py` passing as the baseline integration signal.
+
+---
+
 ## Testing
 
 ### Standalone Testing with Test Harness
