@@ -53,6 +53,36 @@ Ingest data from Cobalt Strike into Nemesis.
 - Uses `settings_cobaltstrike.yaml` configuration file
 - `--showconfig`: Display example configuration
 
+## Connector Preflight Validation (Recommended)
+
+Run a validate config preflight step before launching connector loops. This catches schema mismatches and missing connector sections before long-running sync starts.
+
+### Validate config for each connector
+
+```bash
+cd projects/cli
+uv run python -m cli.main validate-config --connector outflank --config settings_outflank.yaml
+uv run python -m cli.main validate-config --connector mythic --config settings_mythic.yaml
+uv run python -m cli.main validate-config --connector cobaltstrike --config settings_cobaltstrike.yaml
+```
+
+### Connector startup sequence (validation-first)
+
+```bash
+# Outflank
+uv run python -m cli.main connect-outflank --config settings_outflank.yaml
+
+# Mythic
+uv run python -m cli.main connect-mythic --config settings_mythic.yaml
+
+# Cobalt Strike
+uv run python -m cli.main connect-cobaltstrike --config settings_cobaltstrike.yaml
+```
+
+### Outflank local download mode
+
+If Stage1 download files are available on disk, set `downloads_dir_path` in `settings_outflank.yaml`. This bypasses Stage1 API file retrieval and reads files directly from the local Stage1 downloads directory.
+
 ## Additional Tools
 
 - **stress_test**: Load testing tool for API performance evaluation
