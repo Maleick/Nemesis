@@ -136,6 +136,9 @@ if [ "$LLM" = "true" ]; then
     echo "Error: PHOENIX_ENABLED must be 'true' or 'false', got '$PHOENIX_ENABLED'." >&2
     exit 1
   fi
+  if [ ${#CMD_PREFIX[@]} -eq 0 ]; then
+    CMD_PREFIX=("env")
+  fi
   CMD_PREFIX+=("PHOENIX_ENABLED=${PHOENIX_ENABLED:-true}")
 fi
 
