@@ -45,6 +45,16 @@ run_readiness_contract_checks() {
     echo "Readiness contract checks passed."
 }
 
+run_backend_smoke_tests() {
+    echo "Running backend smoke suite..."
+    (
+        cd "$BASE_DIR/projects/web_api"
+        uv run pytest tests/test_ingestion_workflow_smoke.py tests/test_download_range.py tests/test_workflow_observability.py -q
+    )
+    echo ""
+    echo "Backend smoke suite passed."
+}
+
 # Get the absolute path to the project root (one level up from the tools folder)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
@@ -57,6 +67,17 @@ if [ "${1:-}" = "--readiness-contract" ]; then
         exit 1
     fi
     run_readiness_contract_checks
+    exit 0
+fi
+
+if [ "${1:-}" = "--smoke-backend" ]; then
+    shift
+    if [ "$#" -gt 0 ]; then
+        echo "Unknown option(s): $*"
+        echo "Usage: $0 [--readiness-contract|--smoke-backend]"
+        exit 1
+    fi
+    run_backend_smoke_tests
     exit 0
 fi
 
