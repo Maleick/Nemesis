@@ -253,6 +253,43 @@ const HelpPage = () => {
             ))}
           </CardContent>
         </Card>
+
+        <Card className="bg-white dark:bg-dark-secondary">
+          <CardHeader className="pt-2 pb-2">
+            <CardTitle className="text-gray-900 dark:text-white">Observability Triage Runbooks</CardTitle>
+            <CardDescription className="text-gray-500 dark:text-gray-400 pb-0 mb-0">
+              Follow these queue, failure, and service health workflows before escalating incidents.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <section id="queue-triage" className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Queue triage</h3>
+              <ol className="list-decimal pl-5 mt-2 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                <li>Open <code>/api/workflows/observability/summary</code> and validate queue backlog severity.</li>
+                <li>Check RabbitMQ queue depth and delivery rate under <code>/rabbitmq/</code>.</li>
+                <li>Use troubleshooting guidance for queue backlog recovery if pressure is sustained.</li>
+              </ol>
+            </section>
+
+            <section id="failure-triage" className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Failure triage</h3>
+              <ol className="list-decimal pl-5 mt-2 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                <li>Check failed workflow counts in <code>/api/workflows/observability/summary</code>.</li>
+                <li>Correlate affected objects using <code>/api/workflows/lifecycle/&lt;object_id&gt;</code>.</li>
+                <li>Run sustained-condition evaluation through <code>/api/workflows/observability/alerts/evaluate</code>.</li>
+              </ol>
+            </section>
+
+            <section id="service-triage" className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Service triage</h3>
+              <ol className="list-decimal pl-5 mt-2 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                <li>Run <code>./tools/nemesis-ctl.sh status &lt;dev|prod&gt; [--monitoring] [--jupyter] [--llm]</code>.</li>
+                <li>For any unhealthy service, inspect <code>docker compose logs &lt;service&gt; --tail 80</code>.</li>
+                <li>Follow the troubleshooting runbook and re-run status until dependencies stabilize.</li>
+              </ol>
+            </section>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="mt-2 bg-white dark:bg-dark-secondary">

@@ -738,7 +738,17 @@ const StatsOverview = () => {
 
   // Function to handle navigation
   const handleNavigation = (path) => {
+    if (typeof window.location.assign === 'function') {
+      window.location.assign(path);
+      return;
+    }
     window.location.href = path;
+  };
+
+  const observabilityTriageLinks = {
+    queue: '/help#queue-triage',
+    failures: '/help#failure-triage',
+    services: '/help#service-triage',
   };
 
   return (
@@ -926,7 +936,7 @@ const StatsOverview = () => {
                   <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                     {observabilitySummary?.queue_backlog?.total_queued_messages?.toLocaleString() ?? 0} queued
                   </div>
-                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation(observabilityTriageLinks.queue)}>
                     Queue triage links
                   </button>
                 </div>
@@ -941,7 +951,7 @@ const StatsOverview = () => {
                   <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                     {observabilitySummary?.workflow_failures?.failed_workflows?.toLocaleString() ?? 0} failed
                   </div>
-                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation(observabilityTriageLinks.failures)}>
                     Failure triage links
                   </button>
                 </div>
@@ -956,7 +966,7 @@ const StatsOverview = () => {
                   <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
                     {observabilitySummary?.service_health?.readiness || 'unknown'}
                   </div>
-                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation(observabilityTriageLinks.services)}>
                     Service triage links
                   </button>
                 </div>
