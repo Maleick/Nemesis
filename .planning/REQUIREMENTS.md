@@ -7,10 +7,10 @@
 
 ### Service Reliability
 
-- [ ] **RELI-01**: Core services expose deterministic readiness checks that validate required dependencies before reporting healthy
-- [ ] **RELI-02**: Profile-specific startup (`base`, `monitoring`, `llm`) produces an actionable pass/fail health summary
-- [ ] **RELI-03**: Workflow failures surface clear retry/recovery state instead of silent stalls
-- [ ] **RELI-04**: Dependency outages are reported with remediation-oriented error context in service health/status endpoints
+- [x] **RELI-01**: Core services expose deterministic readiness checks that validate required dependencies before reporting healthy
+- [x] **RELI-02**: Profile-specific startup (`base`, `monitoring`, `llm`) produces an actionable pass/fail health summary
+- [x] **RELI-03**: Workflow failures surface clear retry/recovery state instead of silent stalls
+- [x] **RELI-04**: Dependency outages are reported with remediation-oriented error context in service health/status endpoints
 
 ### Observability
 
@@ -66,10 +66,10 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RELI-01 | Phase 1 | Pending |
-| RELI-02 | Phase 1 | Pending |
-| RELI-03 | Phase 1 | Pending |
-| RELI-04 | Phase 1 | Pending |
+| RELI-01 | Phase 1 | Complete |
+| RELI-02 | Phase 1 | Complete |
+| RELI-03 | Phase 1 | Complete |
+| RELI-04 | Phase 1 | Complete |
 | OBS-01 | Phase 2 | Pending |
 | OBS-02 | Phase 2 | Pending |
 | OBS-03 | Phase 2 | Pending |
@@ -92,4 +92,4 @@
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after initial definition*
+*Last updated: 2026-02-25 after phase 1 execution*

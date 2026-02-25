@@ -6,7 +6,7 @@ This roadmap hardens Nemesis's existing brownfield platform before expanding fea
 
 ## Phases
 
-- [ ] **Phase 1: Service Health Contracts** - Make startup/readiness deterministic across all supported profiles
+- [x] **Phase 1: Service Health Contracts** - Make startup/readiness deterministic across all supported profiles (completed 2026-02-25)
 - [ ] **Phase 2: Workflow Observability Baseline** - Establish object-level workflow visibility and actionable monitoring
 - [ ] **Phase 3: Security & Auth Hardening** - Eliminate secret/logging risks and tighten auth-mode safety
 - [ ] **Phase 4: End-to-End Quality Gates** - Add CI smoke/contract validation for critical cross-service paths
@@ -26,9 +26,9 @@ This roadmap hardens Nemesis's existing brownfield platform before expanding fea
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: Define and normalize startup/readiness contract behavior across services
-- [ ] 01-02: Implement profile-aware readiness matrix checks and service health reporting
-- [ ] 01-03: Add workflow failure/recovery state instrumentation at service boundaries
+- [x] 01-01: Define and normalize startup/readiness contract behavior across services (completed 2026-02-25)
+- [x] 01-02: Implement profile-aware readiness matrix checks and service health reporting (completed 2026-02-25)
+- [x] 01-03: Add workflow failure/recovery state instrumentation at service boundaries (completed 2026-02-25)
 
 ### Phase 2: Workflow Observability Baseline
 **Goal**: Make queue/workflow/object lifecycle behavior easy to observe and diagnose.
@@ -108,7 +108,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Service Health Contracts | 0/3 | Not started | - |
+| 1. Service Health Contracts | 3/3 | Complete   | 2026-02-25 |
 | 2. Workflow Observability Baseline | 0/2 | Not started | - |
 | 3. Security & Auth Hardening | 0/2 | Not started | - |
 | 4. End-to-End Quality Gates | 0/3 | Not started | - |
