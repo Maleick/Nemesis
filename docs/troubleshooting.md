@@ -51,6 +51,23 @@ curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/e
 
 Use the summary response to identify sustained queue pressure, failure spikes, and unhealthy dependencies before digging into service-specific logs.
 
+## Incident Triage Runbook (Recommended Order)
+
+Use this sequence to keep triage deterministic across operators:
+
+1. Validate runtime readiness:
+   - `./tools/nemesis-ctl.sh status <dev|prod> [--monitoring] [--jupyter] [--llm]`
+2. Pull a system-level signal:
+   - `curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary`
+3. Correlate the failing object when you have an `object_id`:
+   - `curl -k -u n:n https://nemesis:7443/api/workflows/lifecycle/<object_id>`
+4. Evaluate sustained alert conditions:
+   - `curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/evaluate`
+5. Inspect service logs for the first unhealthy or suspect dependency:
+   - `docker compose logs <service> --tail 80`
+
+This order keeps startup, queue/workflow context, object-level correlation, and service-level diagnostics aligned.
+
 ## Analyze Message Queues
 
 Nemesis uses message queue in its enrichment workflows. To quickly get an overview of the state of the queues, view the "Enrichment Queues" section in Nemesis's dashboard:

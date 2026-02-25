@@ -220,6 +220,23 @@ curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/e
 
 Use these endpoints alongside the Dashboard and Troubleshooting guide to trace ingestion-to-enrichment outcomes and diagnose sustained backlog/failure conditions quickly.
 
+### Operational Incident Triage Sequence
+
+For consistent operations triage, run this sequence in order:
+
+1. Confirm profile readiness status:
+   - `./tools/nemesis-ctl.sh status <dev|prod> [--monitoring] [--jupyter] [--llm]`
+2. Check queue/workflow/service-health summary:
+   - `curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary`
+3. Correlate lifecycle for an impacted object:
+   - `curl -k -u n:n https://nemesis:7443/api/workflows/lifecycle/<object_id>`
+4. Evaluate sustained conditions and emit alerts:
+   - `curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/evaluate`
+5. Inspect logs for failing dependencies:
+   - `docker compose logs <service> --tail 80`
+
+This aligns usage guidance with the troubleshooting runbook and keeps triage steps reproducible.
+
 ### Backend Smoke Gate
 
 Run the backend critical-path smoke gate locally with:
