@@ -20,9 +20,9 @@
 
 ### Security & Auth
 
-- [ ] **SEC-01**: Secret values are never emitted in service logs during startup, runtime, or error handling
-- [ ] **SEC-02**: LLM/auth mode misconfiguration is detected early and surfaced as explicit unhealthy status with remediation guidance
-- [ ] **SEC-03**: Startup preflight validates critical credential alignment for chatbot/agent database access paths
+- [x] **SEC-01**: Secret values are never emitted in service logs during startup, runtime, or error handling
+- [x] **SEC-02**: LLM/auth mode misconfiguration is detected early and surfaced as explicit unhealthy status with remediation guidance
+- [x] **SEC-03**: Startup preflight validates critical credential alignment for chatbot/agent database access paths
 
 ### Quality Gates
 
@@ -73,9 +73,9 @@
 | OBS-01 | Phase 2 | Complete |
 | OBS-02 | Phase 2 | Complete |
 | OBS-03 | Phase 2 | Complete |
-| SEC-01 | Phase 3 | Pending |
-| SEC-02 | Phase 3 | Pending |
-| SEC-03 | Phase 3 | Pending |
+| SEC-01 | Phase 3 | Complete |
+| SEC-02 | Phase 3 | Complete |
+| SEC-03 | Phase 3 | Complete |
 | TEST-01 | Phase 4 | Pending |
 | TEST-02 | Phase 4 | Pending |
 | TEST-03 | Phase 4 | Pending |
