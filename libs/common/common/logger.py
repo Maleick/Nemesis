@@ -107,6 +107,14 @@ def redact_sensitive_data(value: Any, key: str | None = None) -> Any:
     return value
 
 
+def sanitize_log_detail(detail: str, *, max_length: int = 300) -> str:
+    """Bound noisy dependency details while preserving debugging utility."""
+    normalized = " ".join(detail.split())
+    if len(normalized) <= max_length:
+        return normalized
+    return f"{normalized[:max_length]}..."
+
+
 def log_dependency_failure(
     logger: structlog.stdlib.BoundLogger,
     *,
@@ -122,7 +130,7 @@ def log_dependency_failure(
         "service": service,
         "dependency": dependency,
         "readiness": readiness,
-        "detail": detail,
+        "detail": sanitize_log_detail(detail),
     }
     if remediation:
         payload["remediation"] = remediation

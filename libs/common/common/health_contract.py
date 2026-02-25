@@ -71,6 +71,28 @@ def dependency_failed(
     )
 
 
+def dependency_failed_from_exception(
+    name: str,
+    error: Exception,
+    remediation: str | None = None,
+    *,
+    optional: bool = False,
+    logger: structlog.stdlib.BoundLogger | None = None,
+    service: str | None = None,
+    context: Mapping[str, Any] | None = None,
+) -> DependencyReadiness:
+    """Convenience wrapper for standardized exception-backed dependency failures."""
+    return dependency_failed(
+        name=name,
+        detail=str(error),
+        remediation=remediation,
+        optional=optional,
+        logger=logger,
+        service=service,
+        context=context,
+    )
+
+
 def compute_readiness(dependencies: Iterable[DependencyReadiness]) -> ReadinessLevel:
     dependency_list = list(dependencies)
 
