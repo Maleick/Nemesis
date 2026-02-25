@@ -4,11 +4,11 @@ import asyncio
 import os
 
 import aiohttp
-import structlog
+from common.logger import get_logger, sanitize_exception_message, sanitize_log_detail, sanitize_url_for_logging
 from dapr.clients import DaprClient
 
 # Set up logging
-logger = structlog.get_logger(module=__name__)
+logger = get_logger(__name__)
 
 # Configuration
 LLM_EMAIL = os.getenv("LLM_EMAIL", f"bedrock-chat-service@{os.getenv('EMAIL_DOMAIN', 'local')}")
@@ -56,12 +56,12 @@ async def wait_for_litellm() -> bool:
 
             if attempt == MAX_RETRIES:
                 # Don't use logger.error which might print stack traces
-                logger.info(f"LiteLLM API not available after {MAX_RETRIES} attempts")
+                logger.info("LiteLLM API not available after retries", attempts=MAX_RETRIES)
                 return False
 
             # Only log every 5th attempt to reduce noise
             if attempt % 5 == 0 or attempt == 1:
-                logger.debug(f"Attempt {attempt}/{MAX_RETRIES}: LiteLLM not ready, continuing...")
+                logger.debug("LiteLLM not ready yet", attempt=attempt, max_retries=MAX_RETRIES)
             await asyncio.sleep(RETRY_DELAY)
 
     return False
@@ -70,7 +70,7 @@ async def wait_for_litellm() -> bool:
 async def get_token_from_dapr() -> str | None:
     """Retrieve token from Dapr state store"""
     try:
-        logger.info(f"Checking Dapr state store for existing token (key: {TOKEN_KEY})...")
+        logger.info("Checking Dapr state store for existing token", key=TOKEN_KEY)
 
         with DaprClient() as client:
             result = client.get_state(DAPR_STATE_STORE, TOKEN_KEY)
@@ -83,7 +83,7 @@ async def get_token_from_dapr() -> str | None:
 
             logger.info("No existing token found in Dapr state store")
     except Exception as e:
-        logger.error(f"Unexpected error retrieving token from Dapr: {e}")
+        logger.error("Unexpected error retrieving token from Dapr", error=sanitize_exception_message(e))
 
     return None
 
@@ -91,7 +91,7 @@ async def get_token_from_dapr() -> str | None:
 async def save_token_to_dapr(token: str) -> bool:
     """Save token to Dapr state store"""
     try:
-        logger.info(f"Saving token to Dapr state store (key: {TOKEN_KEY})...")
+        logger.info("Saving token to Dapr state store", key=TOKEN_KEY)
 
         with DaprClient() as client:
             client.save_state(DAPR_STATE_STORE, TOKEN_KEY, token)
@@ -99,7 +99,7 @@ async def save_token_to_dapr(token: str) -> bool:
             return True
 
     except Exception as e:
-        logger.error(f"Unexpected error saving token to Dapr: {e}")
+        logger.error("Unexpected error saving token to Dapr", error=sanitize_exception_message(e))
 
     return False
 
@@ -119,12 +119,15 @@ async def validate_token(token: str) -> bool:
                     logger.info("Token validation successful")
                     return True
                 else:
-                    logger.error(f"Token validation failed: {response.status}")
+                    logger.error("Token validation failed", status_code=response.status)
                     response_text = await response.text()
-                    logger.error(f"Response: {response_text}")
+                    logger.error(
+                        "LiteLLM validation response (redacted)",
+                        response_excerpt=sanitize_log_detail(response_text, max_length=160),
+                    )
 
     except (TimeoutError, aiohttp.ClientError) as e:
-        logger.error(f"Token validation failed: {e}")
+        logger.error("Token validation request failed", error=sanitize_exception_message(e))
 
     return False
 
@@ -142,7 +145,13 @@ async def create_new_token() -> str | None:
                 "max_budget": MAX_BUDGET,
                 "budget_duration": BUDGET_DURATION,
             }
-            logger.info(f"create_payload: {create_payload}")
+            logger.info(
+                "Submitting LiteLLM user creation request",
+                user_id=LLM_EMAIL,
+                max_budget=MAX_BUDGET,
+                budget_duration=BUDGET_DURATION,
+                url=sanitize_url_for_logging(f"{LITELLM_API_URL}/user/new"),
+            )
 
             async with session.post(
                 f"{LITELLM_API_URL}/user/new",
@@ -154,7 +163,7 @@ async def create_new_token() -> str | None:
                     response_data = await response.json()
                     token = response_data.get("key")
                     if token:
-                        logger.info(f"Successfully created new chat service user with budget limit of ${MAX_BUDGET}")
+                        logger.info("Successfully created chat service user", max_budget=MAX_BUDGET)
                         return token
 
             # If user creation failed, try to generate key for existing user
@@ -174,12 +183,15 @@ async def create_new_token() -> str | None:
                         logger.info("Generated new API key for existing user")
                         return token
 
-                logger.error(f"Failed to generate API key: {response.status}")
+                logger.error("Failed to generate API key", status_code=response.status)
                 response_text = await response.text()
-                logger.error(f"Response: {response_text}")
+                logger.error(
+                    "LiteLLM key-generation response (redacted)",
+                    response_excerpt=sanitize_log_detail(response_text, max_length=160),
+                )
 
         except (TimeoutError, aiohttp.ClientError) as e:
-            logger.error(f"Failed to create token: {e}")
+            logger.error("Failed to create token", error=sanitize_exception_message(e))
 
     return None
 
@@ -206,8 +218,7 @@ async def litellm_startup() -> str:
         # Validate the existing token
         if await validate_token(existing_token):
             logger.info("Using existing token from Dapr state store")
-            logger.info(f"User: {LLM_EMAIL}")
-            logger.info(f"Budget: ${MAX_BUDGET}")
+            logger.info("Token context", user=LLM_EMAIL, max_budget=MAX_BUDGET)
             logger.info("Token loaded", token_hint=_redact_secret(existing_token))
             return existing_token
         else:
@@ -229,8 +240,7 @@ async def litellm_startup() -> str:
         # Continue anyway - token still works
 
     logger.info("Budget-limited token provisioned successfully!")
-    logger.info(f"User: {LLM_EMAIL}")
-    logger.info(f"Budget: ${MAX_BUDGET}")
+    logger.info("Token context", user=LLM_EMAIL, max_budget=MAX_BUDGET)
     logger.info("Token provisioned", token_hint=_redact_secret(new_token))
 
     return new_token

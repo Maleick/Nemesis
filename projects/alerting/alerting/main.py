@@ -13,7 +13,7 @@ from common.health_contract import (
     dependency_failed_from_exception,
     dependency_ok,
 )
-from common.logger import get_logger
+from common.logger import get_logger, sanitize_exception_message, sanitize_url_for_logging
 from common.models import Alert, CloudEvent
 from common.queues import (
     ALERTING_NEW_ALERT_TOPIC,
@@ -62,7 +62,7 @@ nemesis_url = f"{nemesis_url}/" if not nemesis_url.endswith("/") else nemesis_ur
 with DaprClient() as client:
     secret = client.get_secret(store_name="nemesis-secret-store", key="HASURA_ADMIN_SECRET")
     hasura_admin_secret = secret.secret["HASURA_ADMIN_SECRET"]
-    logger.info("[alerting] HASURA_ADMIN_SECRET retrieved")
+    logger.info("HASURA admin secret loaded for alerting service")
 
 
 def process_apprise_url(url):
@@ -104,14 +104,14 @@ async def check_llm_enabled():
         except Exception as e:
             logger.info(
                 "LLM functionality not available - agents service not reachable",
-                error=str(e),
+                error=sanitize_exception_message(e),
                 attempt=attempt,
                 max_retries=max_retries,
             )
 
         # If not the last attempt, wait before retrying
         if attempt < max_retries:
-            logger.info(f"Waiting {retry_delay} seconds before retry...", attempt=attempt)
+            logger.info("Waiting before retry", retry_delay_seconds=retry_delay, attempt=attempt)
             await asyncio.sleep(retry_delay)
 
     logger.info("LLM functionality disabled - agents service not available after all retries")
@@ -193,7 +193,7 @@ async def load_alert_settings():
                 logger.warning("Failed to load alert settings, using defaults")
 
     except Exception as e:
-        logger.error("Error loading alert settings, using defaults", error=str(e))
+        logger.error("Error loading alert settings, using defaults", error=sanitize_exception_message(e))
 
 
 @asynccontextmanager
@@ -209,7 +209,11 @@ async def lifespan(app: FastAPI):
                 url, tag = process_apprise_url(apprise_url)
                 if not tag:
                     tag = "default"
-                logger.info(f"[alerting] adding Apprise URL: {url} (tag: {tag})")
+                logger.info(
+                    "Adding Apprise URL",
+                    url=sanitize_url_for_logging(url),
+                    tag=tag,
+                )
                 apobj.add(f"{url}?footer=no", tag=tag)
         else:
             # Use test endpoint as default when APPRISE_URLS is not configured
@@ -220,7 +224,7 @@ async def lifespan(app: FastAPI):
 
         # Check if LLM functionality is enabled
         llm_enabled = await check_llm_enabled()
-        logger.info(f"LLM functionality: {'enabled' if llm_enabled else 'disabled'}")
+        logger.info("LLM functionality status", enabled=llm_enabled)
 
         # Load alert settings from database
         await load_alert_settings()
@@ -238,8 +242,12 @@ async def lifespan(app: FastAPI):
             _triage_subscription_task = asyncio.create_task(handle_findings_triage_subscription())  # noqa: F841
             logger.info("Started findings triage subscription handler")
 
-        logger.info(f"Alert rate limiter configured with {MAX_CONCURRENT_ALERTS} concurrent alerts")
-        logger.info(f"Alert retry policy: {MAX_ALERT_RETRIES} retries with {RETRY_DELAY_SECONDS}s delay")
+        logger.info("Alert rate limiter configured", max_concurrent_alerts=MAX_CONCURRENT_ALERTS)
+        logger.info(
+            "Alert retry policy configured",
+            max_alert_retries=MAX_ALERT_RETRIES,
+            retry_delay_seconds=RETRY_DELAY_SECONDS,
+        )
 
     except Exception:
         logger.exception(message="Error initializing Apprise")
@@ -394,7 +402,7 @@ async def handle_feedback_subscription():
                                 UPDATE_ALERT_SENT, variable_values={"object_id": feedback["object_id"]}
                             )
                         except Exception as e:
-                            logger.error("Failed to update alert_sent status", error=str(e))
+                            logger.error("Failed to update alert_sent status", error=sanitize_exception_message(e))
                     else:
                         logger.error("Failed to send feedback notification through Apprise after retries")
 
@@ -634,7 +642,11 @@ def should_filter_alert(alert: Alert) -> tuple[bool, str]:
                         matched_any = True
                         break
                 except re.error as e:
-                    logger.error(f"Invalid included regex pattern: {pattern}", error=str(e))
+                    logger.error(
+                        "Invalid included regex pattern",
+                        pattern=pattern,
+                        error=sanitize_exception_message(e),
+                    )
 
             if not matched_any:
                 return True, "File path does not match any included regex patterns"
@@ -648,7 +660,11 @@ def should_filter_alert(alert: Alert) -> tuple[bool, str]:
                     if re.search(pattern, alert.file_path):
                         return True, f"File path matches excluded regex: {pattern}"
                 except re.error as e:
-                    logger.error(f"Invalid excluded regex pattern: {pattern}", error=str(e))
+                    logger.error(
+                        "Invalid excluded regex pattern",
+                        pattern=pattern,
+                        error=sanitize_exception_message(e),
+                    )
 
     # Alert passes all filters
     return False, "Alert passes all filters"
@@ -704,7 +720,11 @@ async def send_alert_with_retries(alert):
             except Exception as e:
                 retry_count += 1
                 logger.error(
-                    f"Error sending alert, retrying ({retry_count}/{MAX_ALERT_RETRIES})", error=str(e), title=title
+                    "Error sending alert, retrying",
+                    retry_count=retry_count,
+                    max_retries=MAX_ALERT_RETRIES,
+                    error=sanitize_exception_message(e),
+                    title=title,
                 )
                 await asyncio.sleep(RETRY_DELAY_SECONDS)
 

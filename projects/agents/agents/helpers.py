@@ -4,7 +4,7 @@ import os
 
 import openai
 from agents.litellm_startup import litellm_startup
-from common.logger import get_logger
+from common.logger import get_logger, sanitize_exception_message
 from gql import gql
 from httpx import AsyncClient, HTTPStatusError
 from pydantic_ai.retries import AsyncTenacityTransport, wait_retry_after
@@ -61,10 +61,10 @@ async def get_litellm_token():
             if "LiteLLM API not available" in str(e):
                 logger.warning("LiteLLM service is not available")
             else:
-                logger.warning(f"LiteLLM initialization failed: {e}")
+                logger.warning("LiteLLM initialization failed", error=sanitize_exception_message(e))
             return None
         except Exception as e:
-            logger.warning(f"Unexpected error initializing LiteLLM: {e}")
+            logger.warning("Unexpected error initializing LiteLLM", error=sanitize_exception_message(e))
             return None
 
         # Check available models if we have a token
@@ -74,7 +74,11 @@ async def get_litellm_token():
                 client = openai.OpenAI(base_url=LITELLM_OPENAI_BASE_URL, api_key=litellm_token)
                 models = [model.id for model in client.models.list().data]
             except Exception as e:
-                logger.error(f"Error initializing OpenAI client for {LITELLM_OPENAI_BASE_URL}: {e}")
+                logger.error(
+                    "Error initializing OpenAI client",
+                    base_url=LITELLM_OPENAI_BASE_URL,
+                    error=sanitize_exception_message(e),
+                )
                 return None
 
             if models:
@@ -87,7 +91,7 @@ async def get_litellm_token():
             return None
 
     except Exception as e:
-        logger.error("Error initializing LiteLLM connection", error=str(e))
+        logger.error("Error initializing LiteLLM connection", error=sanitize_exception_message(e))
         return None
 
 
@@ -117,12 +121,12 @@ async def fetch_finding_details(session, finding_id):
 
         finding_details = result.get("findings_by_pk")
         if not finding_details:
-            logger.warning(f"No details found for finding ID {finding_id}")
+            logger.warning("No details found for finding ID", finding_id=finding_id)
             return None
 
         return finding_details
     except Exception:
-        logger.exception(message=f"Error fetching details for finding ID {finding_id}")
+        logger.exception(message="Error fetching details for finding ID", finding_id=finding_id)
         return None
 
 
@@ -164,11 +168,16 @@ def check_triage_consensus(session, object_id, threshold=3):
         # Check if we have consensus
         for decision, count in decision_counts.items():
             if count >= threshold:
-                logger.info(f"Found triage consensus for object {object_id}: {decision} ({count} findings)")
+                logger.info(
+                    "Found triage consensus for object",
+                    object_id=object_id,
+                    decision=decision,
+                    findings=count,
+                )
                 return {"has_consensus": True, "decision": decision, "count": count}
 
         return None
 
     except Exception:
-        logger.exception(message=f"Error checking triage consensus for object {object_id}")
+        logger.exception(message="Error checking triage consensus for object", object_id=object_id)
         return None

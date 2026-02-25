@@ -27,6 +27,10 @@ from file_enrichment.activities.publish_findings import publish_alerts_for_findi
 logger = get_logger(__name__)
 
 
+def _jwt_log_context(jwt_token: str) -> dict[str, int]:
+    return {"jwt_length": len(jwt_token or "")}
+
+
 async def noseyparker_subscription_handler(event: CloudEvent[NoseyParkerOutput]):
     """Handler for incoming Nosey Parker scan results"""
     nosey_output = event.data
@@ -67,7 +71,10 @@ def is_jwt_expired(jwt_token: str) -> tuple[bool, dict[str, Any]]:
     try:
         header_b64, payload_b64, signature = jwt_token.split(".")
     except Exception:
-        logger.exception(message="Invalid JWT format. Expected three parts separated by dots.", jwt_token=jwt_token)
+        logger.exception(
+            message="Invalid JWT format. Expected three parts separated by dots.",
+            **_jwt_log_context(jwt_token),
+        )
         return False, {}
 
     # Decode the payload
@@ -80,7 +87,7 @@ def is_jwt_expired(jwt_token: str) -> tuple[bool, dict[str, Any]]:
         payload_json = base64.b64decode(payload_b64).decode("utf-8")
         payload = json.loads(payload_json)
     except Exception:
-        logger.exception(message="Error decoding JWT payload", jwt_token=jwt_token)
+        logger.exception(message="Error decoding JWT payload", **_jwt_log_context(jwt_token))
         return True, {}
 
     # Check if token is expired
@@ -94,7 +101,7 @@ def is_jwt_expired(jwt_token: str) -> tuple[bool, dict[str, Any]]:
 
         return current_time > int(payload["exp"]), payload
     except Exception:
-        logger.exception(message="Error processing jwt_token", jwt_token=jwt_token)
+        logger.exception(message="Error processing jwt_token", **_jwt_log_context(jwt_token))
         return True, payload
 
 
