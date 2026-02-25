@@ -644,7 +644,7 @@ def get_system_report_data(
                 SELECT
                     COUNT(*) as total_workflows,
                     COUNT(CASE WHEN status IN ('COMPLETED', 'completed') THEN 1 END) as successful,
-                    COUNT(CASE WHEN status IN ('FAILED', 'failed', 'ERROR', 'error') THEN 1 END) as failed,
+                    COUNT(CASE WHEN status IN ('FAILED', 'failed', 'ERROR', 'error', 'TIMEOUT', 'timeout') THEN 1 END) as failed,
                     AVG(runtime_seconds) as avg_processing_time
                 FROM workflows w
                 JOIN files_enriched fe ON w.object_id = fe.object_id

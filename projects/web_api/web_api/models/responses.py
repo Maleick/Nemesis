@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EnrichmentResponse(BaseModel):
@@ -63,18 +63,22 @@ class WorkflowMetrics(BaseModel):
 
 class ActiveWorkflowDetail(BaseModel):
     id: str
+    workflow_id: str | None = None
     status: str
     filename: str | None = None
     object_id: str | None = None
     timestamp: datetime | None = None
+    started_at: datetime | None = None
     runtime_seconds: float | None = None
     error: str | None = None
+    success_modules: list[str] = Field(default_factory=list)
+    failure_modules: list[str] = Field(default_factory=list)
 
 
 class WorkflowStatusResponse(BaseModel):
     active_workflows: int
     status_counts: dict[str, int] | None = None
-    active_details: list[ActiveWorkflowDetail] = []
+    active_details: list[ActiveWorkflowDetail] = Field(default_factory=list)
     metrics: WorkflowMetrics
     timestamp: str
     error: str | None = None
@@ -82,7 +86,7 @@ class WorkflowStatusResponse(BaseModel):
 
 class FailedWorkflowsResponse(BaseModel):
     failed_count: int
-    workflows: list[ActiveWorkflowDetail] = []
+    workflows: list[ActiveWorkflowDetail] = Field(default_factory=list)
     timestamp: str
 
 
@@ -128,6 +132,7 @@ class QueueSummary(BaseModel):
     healthy_queues: int
     total_queues_checked: int
     bottleneck_queues: list[str]
+    bottleneck_threshold: int | None = None
     queues_without_consumers: list[str]
     total_memory_bytes: int
 
@@ -204,7 +209,113 @@ class LLMSynthesisResponse(BaseModel):
     success: bool
     report_markdown: str | None = None
     risk_level: str | None = None  # "high", "medium", "low"
-    key_findings: list[str] = []
-    recommendations: list[str] = []
+    key_findings: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
     token_usage: int | None = None
     error: str | None = None
+
+
+class WorkflowLifecycleRecord(BaseModel):
+    workflow_id: str
+    status: str
+    started_at: datetime | None = None
+    runtime_seconds: float | None = None
+    filename: str | None = None
+    success_modules: list[str] = Field(default_factory=list)
+    failure_modules: list[str] = Field(default_factory=list)
+    error: str | None = None
+
+
+class ObjectIngestionDetails(BaseModel):
+    object_id: str
+    agent_id: str | None = None
+    source: str | None = None
+    project: str | None = None
+    path: str | None = None
+    file_name: str | None = None
+    ingested_at: datetime | None = None
+    observed_at: datetime | None = None
+
+
+class ObjectPublicationDetails(BaseModel):
+    enrichments_count: int = 0
+    transforms_count: int = 0
+    findings_count: int = 0
+    last_enrichment_at: datetime | None = None
+    last_transform_at: datetime | None = None
+    last_finding_at: datetime | None = None
+
+
+class ObjectLifecycleSummary(BaseModel):
+    latest_status: str | None = None
+    workflow_count: int = 0
+    running_count: int = 0
+    completed_count: int = 0
+    failed_count: int = 0
+
+
+class ObjectLifecycleResponse(BaseModel):
+    object_id: str
+    ingestion: ObjectIngestionDetails
+    workflows: list[WorkflowLifecycleRecord] = Field(default_factory=list)
+    publication: ObjectPublicationDetails
+    summary: ObjectLifecycleSummary
+    timestamp: str
+
+
+class QueueBacklogSignal(BaseModel):
+    severity: str
+    total_queued_messages: int
+    total_processing_messages: int
+    bottleneck_queues: list[str] = Field(default_factory=list)
+    queues_without_consumers: list[str] = Field(default_factory=list)
+    warning_threshold: int
+    critical_threshold: int
+
+
+class WorkflowFailureSignal(BaseModel):
+    severity: str
+    failed_workflows: int
+    active_workflows: int
+    warning_threshold: int
+    critical_threshold: int
+
+
+class ServiceHealthSignal(BaseModel):
+    severity: str
+    readiness: str
+    unhealthy_dependencies: list[str] = Field(default_factory=list)
+    degraded_dependencies: list[str] = Field(default_factory=list)
+
+
+class ObservabilitySummaryResponse(BaseModel):
+    queue_backlog: QueueBacklogSignal
+    workflow_failures: WorkflowFailureSignal
+    service_health: ServiceHealthSignal
+    timestamp: str
+
+
+class OperationalAlertEvent(BaseModel):
+    condition: str
+    severity: str
+    emitted: bool
+    message: str
+    emitted_at: str | None = None
+
+
+class ObservabilityConditionState(BaseModel):
+    condition: str
+    active: bool
+    severity: str
+    sustained_seconds: int
+    cooldown_remaining_seconds: int
+    eligible: bool
+
+
+class ObservabilityAlertEvaluationResponse(BaseModel):
+    evaluated_at: str
+    sustained_duration_seconds: int
+    cooldown_seconds: int
+    alerts_emitted: list[OperationalAlertEvent] = Field(default_factory=list)
+    condition_states: list[ObservabilityConditionState] = Field(default_factory=list)
+    summary: ObservabilitySummaryResponse

@@ -202,3 +202,20 @@ Navigating to the "Help" menu reachable in the bottom left of the Nemesis interf
 ![ReDoc API Documentation](images/api-redoc.png)
 
 Additionally, the API documentation is dynamically rebuilt by GitHub actions when the relevant files are modified and published to [API](./api.md) for up-to-date offline access.
+
+### Workflow Observability Endpoints
+
+Nemesis now exposes workflow observability endpoints for object-level correlation and operations triage:
+
+```bash
+# Object lifecycle correlation by object_id
+curl -k -u n:n https://nemesis:7443/api/workflows/lifecycle/<object_id>
+
+# Queue/workflow/service-health operational summary
+curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary
+
+# Evaluate sustained conditions and emit operational alerts when eligible
+curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/evaluate
+```
+
+Use these endpoints alongside the Dashboard and Troubleshooting guide to trace ingestion-to-enrichment outcomes and diagnose sustained backlog/failure conditions quickly.

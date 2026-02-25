@@ -23,7 +23,7 @@ from common.health_contract import (
 )
 from common.helpers import get_drive_from_path
 from common.logger import get_logger
-from common.models import BulkEnrichmentEvent, CloudEvent
+from common.models import Alert, BulkEnrichmentEvent, CloudEvent
 from common.models import File as FileModel
 from common.models2.api import (
     APIInfo,
@@ -35,6 +35,8 @@ from common.models2.api import (
 from common.models2.dpapi import DpapiCredentialRequest
 from common.models2.health import ServiceReadinessResponse
 from common.queues import (
+    ALERTING_NEW_ALERT_TOPIC,
+    ALERTING_PUBSUB,
     FILES_BULK_ENRICHMENT_TASK_TOPIC,
     FILES_NEW_FILE_TOPIC,
     FILES_PUBSUB,
@@ -60,6 +62,9 @@ from web_api.models.responses import (
     EnrichmentsListResponse,
     FailedWorkflowsResponse,
     LLMSynthesisResponse,
+    ObjectLifecycleResponse,
+    ObservabilityAlertEvaluationResponse,
+    ObservabilitySummaryResponse,
     QueuesResponse,
     SingleQueueResponse,
     SourceReport,
@@ -181,6 +186,53 @@ def get_db_pool() -> ConnectionPool[Connection[TupleRow]]:
     if _db_pool is None:
         _db_pool = ConnectionPool(get_postgres_connection_str(), min_size=1, max_size=5)
     return _db_pool
+
+
+_OBSERVABILITY_CONDITIONS = ("queue_backlog", "workflow_failures", "service_health")
+_observability_signal_state: dict[str, dict[str, datetime | None]] = {
+    name: {"active_since": None, "last_alert_at": None} for name in _OBSERVABILITY_CONDITIONS
+}
+
+
+def _utcnow() -> datetime:
+    return datetime.now(UTC)
+
+
+def _reset_observability_state() -> None:
+    for state in _observability_signal_state.values():
+        state["active_since"] = None
+        state["last_alert_at"] = None
+
+
+def _env_int(*keys: str, default: int) -> int:
+    for key in keys:
+        raw = os.getenv(key)
+        if raw is None:
+            continue
+        try:
+            return int(raw)
+        except ValueError:
+            logger.warning("Invalid integer environment override", key=key, value=raw)
+    return default
+
+
+def _get_observability_thresholds() -> dict[str, int]:
+    return {
+        "queue_warn": _env_int("OBS_QUEUE_BACKLOG_WARN", "OBS_QUEUE_BACKLOG_WARNING", default=50),
+        "queue_critical": _env_int("OBS_QUEUE_BACKLOG_CRITICAL", default=200),
+        "workflow_warn": _env_int("OBS_WORKFLOW_FAILURE_WARN", "OBS_WORKFLOW_FAILURE_WARNING", default=5),
+        "workflow_critical": _env_int("OBS_WORKFLOW_FAILURE_CRITICAL", default=20),
+        "sustained_seconds": _env_int("OBS_SUSTAINED_DURATION_SECONDS", default=300),
+        "cooldown_seconds": _env_int("OBS_ALERT_COOLDOWN_SECONDS", default=900),
+    }
+
+
+def _severity_for_threshold(value: int, warning: int, critical: int) -> str:
+    if value >= critical:
+        return "critical"
+    if value >= warning:
+        return "warning"
+    return "normal"
 
 
 async def send_postgres_notify(channel: str, payload: str = ""):
@@ -595,6 +647,7 @@ async def get_status():
                             object_id,
                             status,
                             EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - start_time)) as runtime_seconds,
+                            start_time,
                             enrichments_success,
                             enrichments_failure,
                             filename
@@ -603,16 +656,20 @@ async def get_status():
                     """)
                     active_workflows_db = []
                     for row in cur.fetchall():
-                        wf_id, object_id, status, runtime_seconds, success_modules, failure_modules, filename = row
+                        wf_id, object_id, status, runtime_seconds, start_time, success_modules, failure_modules, filename = row
                         active_workflows_db.append(
                             {
                                 "id": wf_id,
+                                "workflow_id": wf_id,
                                 "status": status,
                                 "runtime_seconds": runtime_seconds,
+                                "started_at": start_time,
+                                "timestamp": start_time,
                                 "filename": filename,
                                 "object_id": str(object_id) if object_id else None,
-                                "success_modules": success_modules,
-                                "failure_modules": failure_modules,
+                                "success_modules": success_modules or [],
+                                "failure_modules": failure_modules or [],
+                                "error": (failure_modules[-1] if failure_modules else None),
                             }
                         )
 
@@ -734,11 +791,18 @@ async def get_failed():
                         # Convert datetime to string
                         if "start_time" in workflow_dict:
                             workflow_dict["timestamp"] = workflow_dict["start_time"].isoformat()
+                            workflow_dict["started_at"] = workflow_dict["start_time"].isoformat()
                             del workflow_dict["start_time"]
+
+                        workflow_dict["workflow_id"] = workflow_dict.get("id")
+                        workflow_dict["success_modules"] = []
 
                         # Add error from failure list if available
                         if workflow_dict.get("enrichments_failure") and len(workflow_dict["enrichments_failure"]) > 0:
                             workflow_dict["error"] = workflow_dict["enrichments_failure"][-1]  # Most recent failure
+                            workflow_dict["failure_modules"] = workflow_dict["enrichments_failure"]
+                        else:
+                            workflow_dict["failure_modules"] = []
 
                         failed_workflows.append(workflow_dict)
 
@@ -753,6 +817,415 @@ async def get_failed():
         }
     except Exception as e:
         logger.exception(message="Error getting failed workflow information")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+def _fetch_object_lifecycle_payload(object_id: str) -> dict | None:
+    pool = get_db_pool()
+    with pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT object_id, agent_id, source, project, path, file_name, timestamp, created_at
+                FROM files_enriched
+                WHERE object_id = %s
+                """,
+                [object_id],
+            )
+            enriched_row = cur.fetchone()
+
+            if enriched_row:
+                (
+                    row_object_id,
+                    agent_id,
+                    source,
+                    project,
+                    path,
+                    file_name,
+                    ingested_at,
+                    observed_at,
+                ) = enriched_row
+            else:
+                cur.execute(
+                    """
+                    SELECT object_id, agent_id, source, project, path, timestamp, created_at
+                    FROM files
+                    WHERE object_id = %s
+                    """,
+                    [object_id],
+                )
+                file_row = cur.fetchone()
+                if not file_row:
+                    return None
+                row_object_id, agent_id, source, project, path, ingested_at, observed_at = file_row
+                file_name = None
+
+            row_object_id = str(row_object_id)
+
+            cur.execute(
+                """
+                SELECT
+                    wf_id,
+                    status,
+                    start_time,
+                    runtime_seconds,
+                    filename,
+                    enrichments_success,
+                    enrichments_failure
+                FROM workflows
+                WHERE object_id = %s
+                ORDER BY start_time DESC
+                """,
+                [object_id],
+            )
+            workflow_rows = cur.fetchall()
+
+            workflow_records = []
+            running_count = 0
+            completed_count = 0
+            failed_count = 0
+
+            for wf_id, status, start_time, runtime_seconds, filename, success_modules, failure_modules in workflow_rows:
+                if status == "RUNNING":
+                    running_count += 1
+                elif status == "COMPLETED":
+                    completed_count += 1
+                elif status in {"FAILED", "ERROR", "TIMEOUT"}:
+                    failed_count += 1
+
+                workflow_records.append(
+                    {
+                        "workflow_id": wf_id,
+                        "status": status,
+                        "started_at": start_time,
+                        "runtime_seconds": runtime_seconds,
+                        "filename": filename,
+                        "success_modules": success_modules or [],
+                        "failure_modules": failure_modules or [],
+                        "error": (failure_modules[-1] if failure_modules else None),
+                    }
+                )
+
+            cur.execute("SELECT COUNT(*), MAX(created_at) FROM enrichments WHERE object_id = %s", [object_id])
+            enrichments_count, last_enrichment_at = cur.fetchone() or (0, None)
+
+            cur.execute("SELECT COUNT(*), MAX(created_at) FROM transforms WHERE object_id = %s", [object_id])
+            transforms_count, last_transform_at = cur.fetchone() or (0, None)
+
+            cur.execute("SELECT COUNT(*), MAX(created_at) FROM findings WHERE object_id = %s", [object_id])
+            findings_count, last_finding_at = cur.fetchone() or (0, None)
+
+    return {
+        "object_id": row_object_id,
+        "ingestion": {
+            "object_id": row_object_id,
+            "agent_id": agent_id,
+            "source": source,
+            "project": project,
+            "path": path,
+            "file_name": file_name,
+            "ingested_at": ingested_at,
+            "observed_at": observed_at,
+        },
+        "workflows": workflow_records,
+        "publication": {
+            "enrichments_count": enrichments_count or 0,
+            "transforms_count": transforms_count or 0,
+            "findings_count": findings_count or 0,
+            "last_enrichment_at": last_enrichment_at,
+            "last_transform_at": last_transform_at,
+            "last_finding_at": last_finding_at,
+        },
+        "summary": {
+            "latest_status": workflow_records[0]["status"] if workflow_records else None,
+            "workflow_count": len(workflow_records),
+            "running_count": running_count,
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+        },
+        "timestamp": _utcnow().isoformat(),
+    }
+
+
+async def _load_observability_inputs() -> tuple[dict, dict, dict, dict]:
+    async with WorkflowQueueMonitor() as monitor:
+        queue_metrics = await monitor.get_workflow_queue_metrics()
+
+    workflow_status = await get_status()
+    failed_workflows = await get_failed()
+    health_payload = await healthcheck()
+
+    return queue_metrics, workflow_status, failed_workflows, health_payload
+
+
+def _build_observability_summary_payload(
+    queue_metrics: dict, workflow_status: dict, failed_workflows: dict, health_payload: dict
+) -> dict:
+    thresholds = _get_observability_thresholds()
+
+    queue_summary = queue_metrics.get("summary", {})
+    total_queued_messages = int(queue_summary.get("total_queued_messages", 0))
+    total_processing_messages = int(queue_summary.get("total_processing_messages", 0))
+
+    queue_severity = _severity_for_threshold(
+        total_queued_messages,
+        warning=thresholds["queue_warn"],
+        critical=thresholds["queue_critical"],
+    )
+
+    failed_count = int(failed_workflows.get("failed_count", 0))
+    active_workflows = int(workflow_status.get("active_workflows", 0))
+    workflow_severity = _severity_for_threshold(
+        failed_count,
+        warning=thresholds["workflow_warn"],
+        critical=thresholds["workflow_critical"],
+    )
+
+    readiness = str(health_payload.get("readiness", health_payload.get("status", "unknown"))).lower()
+    if readiness == "unhealthy":
+        health_severity = "critical"
+    elif readiness == "degraded":
+        health_severity = "warning"
+    else:
+        health_severity = "normal"
+
+    unhealthy_dependencies = []
+    degraded_dependencies = []
+    for dependency in health_payload.get("dependencies", []):
+        dep_readiness = str(dependency.get("readiness", "")).lower()
+        if dep_readiness == "unhealthy":
+            unhealthy_dependencies.append(dependency.get("name", "unknown"))
+        elif dep_readiness == "degraded":
+            degraded_dependencies.append(dependency.get("name", "unknown"))
+
+    return {
+        "queue_backlog": {
+            "severity": queue_severity,
+            "total_queued_messages": total_queued_messages,
+            "total_processing_messages": total_processing_messages,
+            "bottleneck_queues": queue_summary.get("bottleneck_queues", []),
+            "queues_without_consumers": queue_summary.get("queues_without_consumers", []),
+            "warning_threshold": thresholds["queue_warn"],
+            "critical_threshold": thresholds["queue_critical"],
+        },
+        "workflow_failures": {
+            "severity": workflow_severity,
+            "failed_workflows": failed_count,
+            "active_workflows": active_workflows,
+            "warning_threshold": thresholds["workflow_warn"],
+            "critical_threshold": thresholds["workflow_critical"],
+        },
+        "service_health": {
+            "severity": health_severity,
+            "readiness": readiness,
+            "unhealthy_dependencies": unhealthy_dependencies,
+            "degraded_dependencies": degraded_dependencies,
+        },
+        "timestamp": _utcnow().isoformat(),
+    }
+
+
+def _build_operational_alert_message(condition: str, summary_payload: dict) -> str:
+    timestamp = summary_payload.get("timestamp") or _utcnow().isoformat()
+    if condition == "queue_backlog":
+        queue_backlog = summary_payload["queue_backlog"]
+        return (
+            "Nemesis operational alert: queue backlog is sustained above threshold.\n"
+            f"- Severity: {queue_backlog['severity']}\n"
+            f"- Total queued messages: {queue_backlog['total_queued_messages']}\n"
+            f"- Bottleneck queues: {', '.join(queue_backlog['bottleneck_queues']) or 'none'}\n"
+            f"- Timestamp: {timestamp}"
+        )
+
+    if condition == "workflow_failures":
+        workflow_failures = summary_payload["workflow_failures"]
+        return (
+            "Nemesis operational alert: workflow failures are sustained above threshold.\n"
+            f"- Severity: {workflow_failures['severity']}\n"
+            f"- Failed workflows: {workflow_failures['failed_workflows']}\n"
+            f"- Active workflows: {workflow_failures['active_workflows']}\n"
+            f"- Timestamp: {timestamp}"
+        )
+
+    service_health = summary_payload["service_health"]
+    return (
+        "Nemesis operational alert: unhealthy service readiness is sustained.\n"
+        f"- Severity: {service_health['severity']}\n"
+        f"- Readiness: {service_health['readiness']}\n"
+        f"- Unhealthy dependencies: {', '.join(service_health['unhealthy_dependencies']) or 'none'}\n"
+        f"- Timestamp: {timestamp}"
+    )
+
+
+def _alert_severity_value(severity: str) -> int:
+    if severity == "critical":
+        return 9
+    if severity == "warning":
+        return 5
+    return 1
+
+
+async def _publish_operational_alert(condition: str, severity: str, message: str) -> bool:
+    try:
+        alert = Alert(
+            title=f"Nemesis Operational Alert: {condition.replace('_', ' ').title()}",
+            body=message,
+            service="web_api",
+            category="operational_observability",
+            severity=_alert_severity_value(severity),
+        )
+        async with DaprClient() as client:
+            await client.publish_event(
+                pubsub_name=ALERTING_PUBSUB,
+                topic_name=ALERTING_NEW_ALERT_TOPIC,
+                data=json.dumps(alert.model_dump(exclude_unset=True)),
+                data_content_type="application/json",
+            )
+        return True
+    except Exception as e:
+        logger.exception("Failed to publish operational observability alert", condition=condition, error=str(e))
+        return False
+
+
+async def _evaluate_observability_alerts(summary_payload: dict, emit_alerts: bool = True) -> dict:
+    now = _utcnow()
+    thresholds = _get_observability_thresholds()
+    condition_to_severity = {
+        "queue_backlog": summary_payload["queue_backlog"]["severity"],
+        "workflow_failures": summary_payload["workflow_failures"]["severity"],
+        "service_health": summary_payload["service_health"]["severity"],
+    }
+
+    condition_states = []
+    alerts_emitted = []
+
+    for condition, severity in condition_to_severity.items():
+        active = severity in {"warning", "critical"}
+        state = _observability_signal_state[condition]
+
+        if active and state["active_since"] is None:
+            state["active_since"] = now
+        elif not active:
+            state["active_since"] = None
+
+        sustained_seconds = int((now - state["active_since"]).total_seconds()) if state["active_since"] else 0
+
+        last_alert_at = state["last_alert_at"]
+        if last_alert_at is None:
+            cooldown_remaining_seconds = 0
+        else:
+            elapsed = int((now - last_alert_at).total_seconds())
+            cooldown_remaining_seconds = max(0, thresholds["cooldown_seconds"] - elapsed)
+
+        eligible = (
+            active
+            and sustained_seconds >= thresholds["sustained_seconds"]
+            and cooldown_remaining_seconds == 0
+        )
+
+        if eligible and emit_alerts:
+            message = _build_operational_alert_message(condition, summary_payload)
+            emitted = await _publish_operational_alert(condition=condition, severity=severity, message=message)
+            alerts_emitted.append(
+                {
+                    "condition": condition,
+                    "severity": severity,
+                    "emitted": emitted,
+                    "message": message,
+                    "emitted_at": now.isoformat() if emitted else None,
+                }
+            )
+            if emitted:
+                state["last_alert_at"] = now
+
+        condition_states.append(
+            {
+                "condition": condition,
+                "active": active,
+                "severity": severity,
+                "sustained_seconds": sustained_seconds,
+                "cooldown_remaining_seconds": cooldown_remaining_seconds,
+                "eligible": eligible,
+            }
+        )
+
+    return {
+        "evaluated_at": now.isoformat(),
+        "sustained_duration_seconds": thresholds["sustained_seconds"],
+        "cooldown_seconds": thresholds["cooldown_seconds"],
+        "alerts_emitted": alerts_emitted,
+        "condition_states": condition_states,
+        "summary": summary_payload,
+    }
+
+
+@app.get(
+    "/workflows/lifecycle/{object_id}",
+    response_model=ObjectLifecycleResponse,
+    tags=["workflows"],
+    responses={404: {"model": ErrorResponse}, 500: {"model": ErrorResponse}},
+    summary="Get object workflow lifecycle",
+    description="Get object-level ingestion to enrichment/publication lifecycle correlation by object_id.",
+)
+async def get_workflow_lifecycle(
+    object_id: str = Path(..., description="Object ID to correlate across ingestion and workflow lifecycle"),
+):
+    try:
+        payload = await asyncio.to_thread(_fetch_object_lifecycle_payload, object_id)
+        if payload is None:
+            raise HTTPException(status_code=404, detail=f"Object {object_id} not found")
+        return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(message="Error getting workflow lifecycle", object_id=object_id)
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get(
+    "/workflows/observability/summary",
+    response_model=ObservabilitySummaryResponse,
+    tags=["workflows"],
+    responses={500: {"model": ErrorResponse}},
+    summary="Get observability summary",
+    description="Aggregate queue backlog, workflow failure, and service-health signals with threshold severity.",
+)
+async def get_observability_summary():
+    try:
+        queue_metrics, workflow_status, failed_workflows, health_payload = await _load_observability_inputs()
+        return _build_observability_summary_payload(
+            queue_metrics=queue_metrics,
+            workflow_status=workflow_status,
+            failed_workflows=failed_workflows,
+            health_payload=health_payload,
+        )
+    except Exception as e:
+        logger.exception(message="Error getting observability summary")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post(
+    "/workflows/observability/alerts/evaluate",
+    response_model=ObservabilityAlertEvaluationResponse,
+    tags=["workflows"],
+    responses={500: {"model": ErrorResponse}},
+    summary="Evaluate sustained observability conditions",
+    description="Evaluate sustained backlog/failure/health conditions and publish operational alerts when eligible.",
+)
+async def evaluate_observability_alerts(
+    emit_alerts: bool = Query(True, description="Publish alerts for eligible sustained conditions"),
+):
+    try:
+        queue_metrics, workflow_status, failed_workflows, health_payload = await _load_observability_inputs()
+        summary_payload = _build_observability_summary_payload(
+            queue_metrics=queue_metrics,
+            workflow_status=workflow_status,
+            failed_workflows=failed_workflows,
+            health_payload=health_payload,
+        )
+        return await _evaluate_observability_alerts(summary_payload=summary_payload, emit_alerts=emit_alerts)
+    except Exception as e:
+        logger.exception(message="Error evaluating observability alerts")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
