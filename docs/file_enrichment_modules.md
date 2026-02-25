@@ -25,6 +25,54 @@ dependencies = []
 
 Then in this folder, run `uv add X` to add a new library. The dynamic module loader will install the necessary dependencies in a virtual env for just that module.
 
+## Verification Checklist
+
+Use this checklist before opening a PR for a new enrichment module. This is the canonical extension contract for module onboarding.
+
+1. `analyzer.py` exports `create_enrichment_module()` and returns an `EnrichmentModule` implementation.
+2. The module sets a unique `name` and a `dependencies` list (empty list is valid).
+3. The module sets `self.workflows = ["default"]` (or another explicit workflow list that matches deployment intent).
+4. `should_process(object_id, file_path)` is implemented and deterministic for supported targets.
+5. `process(object_id, file_path)` returns `EnrichmentResult | None` and never raises uncaught exceptions.
+6. Module behavior is testable with the harness under `libs/file_enrichment_modules/tests/harness/`.
+
+### Minimal `analyzer.py` Contract Template
+
+```python
+from common.models import EnrichmentResult
+from file_enrichment_modules.module_loader import EnrichmentModule
+
+
+class ExampleAnalyzer(EnrichmentModule):
+    name: str = "example_analyzer"
+    dependencies: list[str] = []
+
+    def __init__(self):
+        from common.storage import StorageMinio
+
+        self.storage = StorageMinio()
+        self.asyncpg_pool = None
+        self.workflows = ["default"]
+
+    async def should_process(self, object_id: str, file_path: str | None = None) -> bool:
+        return True
+
+    async def process(self, object_id: str, file_path: str | None = None) -> EnrichmentResult | None:
+        result = EnrichmentResult(module_name=self.name, dependencies=self.dependencies)
+        return result
+
+
+def create_enrichment_module() -> EnrichmentModule:
+    return ExampleAnalyzer()
+```
+
+### Required Verification Commands
+
+```bash
+cd /opt/Nemesis && bash tools/tests/test_extension_contract_docs.sh
+cd /opt/Nemesis/libs/file_enrichment_modules && uv run pytest tests/test_harness_integration.py -q
+```
+
 ## Tips / Tricks
 
 The async `should_process()` function  determines if the module should run on a file. You can either check the name or any other component of the base enriched file with `file_enriched = await get_file_enriched(object_id, self.asyncpg_pool)`:
