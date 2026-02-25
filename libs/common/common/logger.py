@@ -2,6 +2,8 @@ import logging
 import os
 import sys
 import warnings
+from collections.abc import Mapping, Sequence
+from typing import Any
 
 import structlog
 from structlog.stdlib import ProcessorFormatter
@@ -69,3 +71,62 @@ structlog.configure(
 def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
     logging.getLogger(name).setLevel(LOG_LEVEL)
     return structlog.get_logger(name)
+
+
+_REDACTED = "[REDACTED]"
+_SENSITIVE_KEY_MARKERS = (
+    "secret",
+    "password",
+    "passwd",
+    "token",
+    "api_key",
+    "apikey",
+    "authorization",
+    "cookie",
+    "credential",
+    "private_key",
+)
+
+
+def _is_sensitive_key(key: str) -> bool:
+    lowered = key.lower()
+    return any(marker in lowered for marker in _SENSITIVE_KEY_MARKERS)
+
+
+def redact_sensitive_data(value: Any, key: str | None = None) -> Any:
+    """Recursively redact values likely to contain secrets before logging."""
+    if key and _is_sensitive_key(key):
+        return _REDACTED
+
+    if isinstance(value, Mapping):
+        return {k: redact_sensitive_data(v, key=str(k)) for k, v in value.items()}
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [redact_sensitive_data(item, key=key) for item in value]
+
+    return value
+
+
+def log_dependency_failure(
+    logger: structlog.stdlib.BoundLogger,
+    *,
+    service: str,
+    dependency: str,
+    detail: str,
+    remediation: str | None = None,
+    readiness: str = "unhealthy",
+    context: Mapping[str, Any] | None = None,
+) -> None:
+    """Emit a standardized, secret-safe readiness failure event."""
+    payload: dict[str, Any] = {
+        "service": service,
+        "dependency": dependency,
+        "readiness": readiness,
+        "detail": detail,
+    }
+    if remediation:
+        payload["remediation"] = remediation
+    if context:
+        payload["context"] = redact_sensitive_data(context)
+
+    logger.warning("Dependency readiness check failed", **payload)
