@@ -15,6 +15,12 @@ import httpx
 import psycopg
 import requests
 from common.db import get_postgres_connection_str
+from common.health_contract import (
+    build_health_response,
+    dependency_degraded,
+    dependency_failed_from_exception,
+    dependency_ok,
+)
 from common.helpers import get_drive_from_path
 from common.logger import get_logger
 from common.models import BulkEnrichmentEvent, CloudEvent
@@ -24,10 +30,10 @@ from common.models2.api import (
     ErrorResponse,
     FileMetadata,
     FileWithMetadataResponse,
-    HealthResponse,
     YaraReloadResponse,
 )
 from common.models2.dpapi import DpapiCredentialRequest
+from common.models2.health import ServiceReadinessResponse
 from common.queues import (
     FILES_BULK_ENRICHMENT_TASK_TOPIC,
     FILES_NEW_FILE_TOPIC,
@@ -1161,14 +1167,58 @@ async def trigger_cleanup(request: CleanupRequest = Body(default=None, descripti
 
 @app.get(
     "/system/health",
-    response_model=HealthResponse,
+    response_model=ServiceReadinessResponse,
     tags=["system"],
     summary="Health check",
     description="Health check endpoint for Docker healthcheck",
 )
 @app.head("/healthz", include_in_schema=False)
 async def healthcheck():
-    return {"status": "healthy"}
+    dependencies = []
+
+    try:
+        pool = get_db_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+        dependencies.append(dependency_ok("postgres"))
+    except Exception as e:
+        dependencies.append(
+            dependency_failed_from_exception(
+                "postgres",
+                e,
+                remediation="Check Postgres availability and web-api database settings",
+                logger=logger,
+                service="web_api",
+            )
+        )
+
+    auth_status = await get_llm_auth_status()
+    if auth_status.get("healthy"):
+        dependencies.append(
+            dependency_ok(
+                "agents-llm-auth",
+                detail=f"mode={auth_status.get('mode', 'unknown')}, source={auth_status.get('source', 'unknown')}",
+            )
+        )
+    else:
+        dependencies.append(
+            dependency_degraded(
+                "agents-llm-auth",
+                auth_status.get("message", "LLM auth status unavailable"),
+                remediation="Check agents service readiness and configured LLM auth mode",
+                optional=True,
+                logger=logger,
+                service="web_api",
+                context={
+                    "mode": auth_status.get("mode"),
+                    "source": auth_status.get("source"),
+                },
+            )
+        )
+
+    return build_health_response(service="web_api", dependencies=dependencies)
 
 
 @app.get(
