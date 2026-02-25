@@ -160,6 +160,9 @@ const StatsOverview = () => {
   const [queueStats, setQueueStats] = useState(null);
   const [isQueueLoading, setIsQueueLoading] = useState(true);
   const [queueError, setQueueError] = useState(null);
+  const [observabilitySummary, setObservabilitySummary] = useState(null);
+  const [isObservabilityLoading, setIsObservabilityLoading] = useState(true);
+  const [observabilityError, setObservabilityError] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(null);
 
 
@@ -624,10 +627,29 @@ const StatsOverview = () => {
       setQueueStats(data);
       setQueueError(null);
     } catch (err) {
-      console.error('Error fetching queue stats:', err);;
+      console.error('Error fetching queue stats:', err);
       setQueueError(err.message);
     } finally {
       setIsQueueLoading(false);
+    }
+  }, []);
+
+  const fetchObservabilitySummary = useCallback(async () => {
+    try {
+      const response = await fetch('/api/workflows/observability/summary');
+
+      if (!response.ok) {
+        throw new Error(`Network response error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setObservabilitySummary(data);
+      setObservabilityError(null);
+    } catch (err) {
+      console.error('Error fetching observability summary:', err);
+      setObservabilityError(err.message);
+    } finally {
+      setIsObservabilityLoading(false);
     }
   }, []);
 
@@ -638,6 +660,7 @@ const StatsOverview = () => {
     fetchFailedWorkflows();
     fetchTimeSeriesData();
     fetchQueueStats();
+    fetchObservabilitySummary();
 
     // Set up polling interval for all
     const statsIntervalId = setInterval(fetchStats, POLL_INTERVAL);
@@ -645,6 +668,7 @@ const StatsOverview = () => {
     const failedWorkflowsIntervalId = setInterval(fetchFailedWorkflows, POLL_INTERVAL);
     const timeSeriesIntervalId = setInterval(fetchTimeSeriesData, POLL_INTERVAL);
     const queueStatsIntervalId = setInterval(fetchQueueStats, POLL_INTERVAL);
+    const observabilityIntervalId = setInterval(fetchObservabilitySummary, POLL_INTERVAL);
 
     // Cleanup intervals on component unmount
     return () => {
@@ -653,8 +677,9 @@ const StatsOverview = () => {
       clearInterval(failedWorkflowsIntervalId);
       clearInterval(timeSeriesIntervalId);
       clearInterval(queueStatsIntervalId);
+      clearInterval(observabilityIntervalId);
     };
-  }, [fetchStats, fetchEnrichmentStatus, fetchFailedWorkflows, fetchTimeSeriesData, fetchQueueStats]);
+  }, [fetchStats, fetchEnrichmentStatus, fetchFailedWorkflows, fetchTimeSeriesData, fetchQueueStats, fetchObservabilitySummary]);
 
   // Add visibility change handler to pause/resume polling when tab is hidden
   useEffect(() => {
@@ -666,12 +691,13 @@ const StatsOverview = () => {
         fetchFailedWorkflows();
         fetchTimeSeriesData();
         fetchQueueStats();
+        fetchObservabilitySummary();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, [fetchStats, fetchEnrichmentStatus, fetchFailedWorkflows, fetchTimeSeriesData, fetchQueueStats]);
+  }, [fetchStats, fetchEnrichmentStatus, fetchFailedWorkflows, fetchTimeSeriesData, fetchQueueStats, fetchObservabilitySummary]);
 
 
 
@@ -682,6 +708,21 @@ const StatsOverview = () => {
     { name: '90th Percentile', value: enrichmentStats.metrics.processing_times.p90_seconds },
     { name: 'Maximum', value: enrichmentStats.metrics.processing_times.max_seconds }
   ];
+
+  const getSeverityBadgeClass = (severity) => {
+    if (severity === 'critical') {
+      return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+    }
+    if (severity === 'warning') {
+      return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+    }
+    return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+  };
+
+  const formatSeverity = (severity) => {
+    if (!severity) return 'Unknown';
+    return `${severity.charAt(0).toUpperCase()}${severity.slice(1)}`;
+  };
 
   if (error) {
     return (
@@ -868,6 +909,61 @@ const StatsOverview = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Enrichment Overview Section */}
         <DashboardSection title="Enrichment Overview">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {isObservabilityLoading ? (
+              <div className="md:col-span-3 flex justify-center py-3">
+                <div className="animate-spin h-6 w-6 border-2 border-blue-500 rounded-full border-t-transparent" />
+              </div>
+            ) : (
+              <>
+                <div className="p-3 bg-white dark:bg-gray-700 rounded shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Queue Backlog</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getSeverityBadgeClass(observabilitySummary?.queue_backlog?.severity)}`}>
+                      {formatSeverity(observabilitySummary?.queue_backlog?.severity)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    {observabilitySummary?.queue_backlog?.total_queued_messages?.toLocaleString() ?? 0} queued
+                  </div>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                    Queue triage links
+                  </button>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-gray-700 rounded shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Workflow Failures</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getSeverityBadgeClass(observabilitySummary?.workflow_failures?.severity)}`}>
+                      {formatSeverity(observabilitySummary?.workflow_failures?.severity)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    {observabilitySummary?.workflow_failures?.failed_workflows?.toLocaleString() ?? 0} failed
+                  </div>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                    Failure triage links
+                  </button>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-gray-700 rounded shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">Service Health</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getSeverityBadgeClass(observabilitySummary?.service_health?.severity)}`}>
+                      {formatSeverity(observabilitySummary?.service_health?.severity)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    {observabilitySummary?.service_health?.readiness || 'unknown'}
+                  </div>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation('/help')}>
+                    Service triage links
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
             <StatCard
               title="Active Workflows"
@@ -1077,6 +1173,17 @@ const StatsOverview = () => {
           <div className="flex flex-col">
             <span className="text-yellow-600 dark:text-yellow-400">
               Warning: Queue metrics unavailable: {queueError}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {observabilityError && (
+        <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-center space-x-2 transition-colors mt-4">
+          <AlertTriangle className="w-5 h-5 text-yellow-500 dark:text-yellow-400" />
+          <div className="flex flex-col">
+            <span className="text-yellow-600 dark:text-yellow-400">
+              Warning: Observability summary unavailable: {observabilityError}
             </span>
           </div>
         </div>

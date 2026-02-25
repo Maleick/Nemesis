@@ -34,6 +34,23 @@ Common remediation flow:
 2. Fix the first `unhealthy` service shown in the matrix
 3. Re-run status until all required services report `healthy` (or expected `degraded` for optional profile dependencies)
 
+## Workflow Observability API
+
+For API-first triage, use the workflow observability endpoints:
+
+```bash
+# Correlate one object from ingestion through workflow outcomes
+curl -k -u n:n https://nemesis:7443/api/workflows/lifecycle/<object_id>
+
+# Get queue backlog + workflow failure + service-health summary
+curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary
+
+# Evaluate sustained backlog/failure/health conditions and emit operational alerts
+curl -k -u n:n -X POST https://nemesis:7443/api/workflows/observability/alerts/evaluate
+```
+
+Use the summary response to identify sustained queue pressure, failure spikes, and unhealthy dependencies before digging into service-specific logs.
+
 ## Analyze Message Queues
 
 Nemesis uses message queue in its enrichment workflows. To quickly get an overview of the state of the queues, view the "Enrichment Queues" section in Nemesis's dashboard:

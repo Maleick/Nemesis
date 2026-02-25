@@ -22,6 +22,18 @@ const allServices = [
         link: '/api/redoc',
         title: 'ReDoc',
         description: 'Interactive ReDoc API documentation viewer'
+      },
+      {
+        path: '/api/workflows/observability/summary',
+        link: '/api/workflows/observability/summary',
+        title: 'Observability Summary',
+        description: 'Queue/workflow/service-health operational summary'
+      },
+      {
+        path: '/api/workflows/lifecycle/{object_id}',
+        link: '/api/workflows/lifecycle/{object_id}',
+        title: 'Object Lifecycle',
+        description: 'Object-level workflow lifecycle correlation endpoint'
       }
     ]
   },

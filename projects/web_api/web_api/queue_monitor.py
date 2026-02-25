@@ -1,5 +1,6 @@
 # src/workflow/queue_monitor.py
 import base64
+import os
 from datetime import datetime
 from typing import Any
 
@@ -33,6 +34,7 @@ class WorkflowQueueMonitor:
     def __init__(self):
         self.management_url = "http://rabbitmq:15672/rabbitmq"
         self._session = None
+        self._bottleneck_threshold = int(os.getenv("WORKFLOW_QUEUE_BOTTLENECK_THRESHOLD", "10"))
 
         with DaprClient() as client:
             secret = client.get_secret(store_name="nemesis-secret-store", key="RABBITMQ_USER")
@@ -55,7 +57,9 @@ class WorkflowQueueMonitor:
         if self._session:
             await self._session.close()
 
-    async def get_workflow_queue_metrics(self, topics: list[str] | None = None) -> dict[str, Any]:
+    async def get_workflow_queue_metrics(
+        self, topics: list[str] | None = None, bottleneck_threshold: int | None = None
+    ) -> dict[str, Any]:
         """
         Get comprehensive queue metrics for workflow topics.
 
@@ -67,6 +71,8 @@ class WorkflowQueueMonitor:
         """
         if topics is None:
             topics = self.DEFAULT_TOPICS.copy()
+        if bottleneck_threshold is None:
+            bottleneck_threshold = self._bottleneck_threshold
 
         if not self._session:
             raise RuntimeError("Monitor must be used as async context manager")
@@ -162,7 +168,11 @@ class WorkflowQueueMonitor:
                 }
 
         healthy_queues = sum(1 for q in queue_metrics.values() if q.get("queue_exists", False))
-        bottleneck_queues = [topic for topic, metrics in queue_metrics.items() if metrics.get("ready_messages", 0) > 10]
+        bottleneck_queues = [
+            topic
+            for topic, metrics in queue_metrics.items()
+            if metrics.get("ready_messages", 0) > bottleneck_threshold
+        ]
         queues_without_consumers = [
             topic
             for topic, metrics in queue_metrics.items()
@@ -178,6 +188,7 @@ class WorkflowQueueMonitor:
                 "healthy_queues": healthy_queues,
                 "total_queues_checked": len(topics),
                 "bottleneck_queues": bottleneck_queues,
+                "bottleneck_threshold": bottleneck_threshold,
                 "queues_without_consumers": queues_without_consumers,
                 "total_memory_bytes": sum(q.get("memory_bytes", 0) for q in queue_metrics.values()),
             },
