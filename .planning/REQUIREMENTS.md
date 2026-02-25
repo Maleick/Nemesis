@@ -1,0 +1,56 @@
+# Requirements: Nemesis Platform Evolution
+
+**Defined:** 2026-02-25
+**Core Value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.
+
+## v1.1 Requirements
+
+### Scale & Throughput
+
+- [ ] **SCALE-01**: Operators can apply partitioned throughput controls with measurable queue-drain targets for high-volume workflows.
+- [ ] **SCALE-02**: Expensive enrichment classes are governed by policy-driven throttling that preserves baseline workflow responsiveness.
+- [ ] **SCALE-03**: Operators can deploy and validate multi-node capacity profiles using documented, executable runbooks.
+
+### AI Governance
+
+- [ ] **AI-01**: AI triage outputs expose confidence-aware policy mode and preserve explicit operator override controls.
+- [ ] **AI-02**: Operators can monitor AI usage/cost governance signals with budget-oriented warning states.
+
+## v2 Requirements
+
+### Scale & Platform Evolution
+
+- **SCALE-04**: Support dynamic autoscaling recommendations based on live queue/service pressure telemetry.
+- **SCALE-05**: Add environment-diff tooling for profile parity checks across dev/stage/prod.
+
+### Advanced Analysis
+
+- **AI-03**: Add cached synthesis strategy with invalidation controls for repeat report requests.
+- **AI-04**: Provide policy simulation mode for AI triage decisions before enforcement.
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Kubernetes migration in v1.1 | Docker Compose is the committed operator model for this cycle. |
+| Fully autonomous finding mutation by AI | Requires stronger trust/safety controls than current milestone scope. |
+| Broad architecture rewrite away from Dapr workflows | High-risk disruption without direct milestone value. |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| SCALE-01 | Phase 7 | Pending |
+| SCALE-02 | Phase 7 | Pending |
+| SCALE-03 | Phase 8 | Pending |
+| AI-01 | Phase 9 | Pending |
+| AI-02 | Phase 9 | Pending |
+
+**Coverage:**
+- v1.1 requirements: 5 total
+- Mapped to phases: 5
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-02-25*
+*Last updated: 2026-02-25 after milestone v1.1 requirement definition*
