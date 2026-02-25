@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: scale-ai-operations
-status: planning
-last_updated: "2026-02-25T22:18:00Z"
+status: roadmap_defined
+last_updated: "2026-02-25T22:22:00Z"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -18,14 +18,14 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-02-25)
 
 **Core value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.
-**Current focus:** Define v1.1 requirements and roadmap for scale and AI operations.
+**Current focus:** Phase 7 planning for throughput controls and workload policies.
 
 ## Current Position
 
-Phase: Not started (milestone definition)
-Plan: -
-Status: Milestone v1.1 initialized; requirements and roadmap drafting in progress
-Last activity: 2026-02-25 - Started v1.1 milestone setup with research-first flow
+Phase: 7 of 9 (not started)
+Plan: 0 of 0 in current phase
+Status: Milestone v1.1 initialized with requirements and roadmap; ready for phase discussion/planning
+Last activity: 2026-02-25 - Defined v1.1 requirements and roadmap (phases 7-9)
 
 Progress: [░░░░░░░░░░] 0%
 
@@ -33,9 +33,9 @@ Progress: [░░░░░░░░░░] 0%
 
 ### Decisions
 
-- Keep Docker Compose + Dapr architecture model for v1.1 changes.
-- Continue verification-first workflow patterns introduced in v1.0.
-- Focus v1.1 on scale/platform (`SCALE-*`) and AI governance (`AI-*`) requirements.
+- Continue Docker Compose + Dapr architecture model for v1.1.
+- Preserve verification-first execution and explicit phase verification artifacts.
+- Prioritize `SCALE-*` before `AI-*` changes in this milestone to stabilize runtime behavior first.
 
 ### Pending Todos
 
@@ -44,8 +44,8 @@ None.
 ### Blockers/Concerns
 
 - No active blockers.
-- Milestone planning artifacts must be finalized before phase planning starts.
+- Phase 7 planning should lock measurable throughput targets before implementation.
 
 ## Session Continuity
 
-Last major action: v1.1 milestone initialization on 2026-02-25.
+Last major action: Milestone v1.1 requirements and roadmap initialization on 2026-02-25.

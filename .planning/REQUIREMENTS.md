@@ -53,4 +53,4 @@
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after milestone v1.1 requirement definition*
+*Last updated: 2026-02-25 after v1.1 roadmap creation*
