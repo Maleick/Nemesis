@@ -53,5 +53,14 @@ jobs:
       - name: Run backend smoke suite
         run: ./tools/test.sh --smoke-backend
 
+      - name: Run profile readiness smoke contracts
+        run: bash tools/tests/test_nemesis_ctl_profiles.sh
+
+      - name: Install frontend dependencies
+        run: cd projects/frontend && npm ci
+
+      - name: Run frontend smoke and build
+        run: cd projects/frontend && npm run test:smoke && npm run build
+
       - name: Run pyright type checks
         run: ./tools/typecheck.sh
