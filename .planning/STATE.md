@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: between_milestones
-last_updated: "2026-02-25T21:24:00Z"
+milestone: v1.1
+milestone_name: scale-ai-operations
+status: planning
+last_updated: "2026-02-25T22:18:00Z"
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 3
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
@@ -17,31 +17,25 @@ progress:
 
 See: `.planning/PROJECT.md` (updated 2026-02-25)
 
-**Core value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.  
-**Current focus:** Start v1.1 milestone definition and requirements.
+**Core value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.
+**Current focus:** Define v1.1 requirements and roadmap for scale and AI operations.
 
 ## Current Position
 
-Milestone `v1.0` is complete and archived.
+Phase: Not started (milestone definition)
+Plan: -
+Status: Milestone v1.1 initialized; requirements and roadmap drafting in progress
+Last activity: 2026-02-25 - Started v1.1 milestone setup with research-first flow
 
-- Roadmap archive: `.planning/milestones/v1.0-ROADMAP.md`
-- Requirements archive: `.planning/milestones/v1.0-REQUIREMENTS.md`
-- UAT coverage: Phase 6 UAT complete (`5 passed, 0 issues`)
-
-## Completion Snapshot
-
-- Phases: `6/6` complete
-- Plans: `14/14` complete
-- Tasks: `42` completed
-- Milestone close commit range: `9cdab67..c84e198`
+Progress: [░░░░░░░░░░] 0%
 
 ## Accumulated Context
 
 ### Decisions
 
-- Adopted verification-first phase execution with explicit per-phase verification artifacts (`*-VERIFICATION.md`).
-- Maintained docs-as-contract pattern for operator and extension workflows with deterministic guard scripts.
-- Accepted milestone close without a separate `v1.0` milestone-audit artifact; recorded as known gap in `MILESTONES.md`.
+- Keep Docker Compose + Dapr architecture model for v1.1 changes.
+- Continue verification-first workflow patterns introduced in v1.0.
+- Focus v1.1 on scale/platform (`SCALE-*`) and AI governance (`AI-*`) requirements.
 
 ### Pending Todos
 
@@ -49,9 +43,9 @@ None.
 
 ### Blockers/Concerns
 
-- No active implementation blockers.
-- Next milestone planning must create fresh `.planning/REQUIREMENTS.md`.
+- No active blockers.
+- Milestone planning artifacts must be finalized before phase planning starts.
 
 ## Session Continuity
 
-Last major action: Milestone archival + UAT completion for Phase 6 on 2026-02-25.
+Last major action: v1.1 milestone initialization on 2026-02-25.
