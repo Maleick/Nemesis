@@ -14,9 +14,9 @@
 
 ### Observability
 
-- [ ] **OBS-01**: Operators can correlate file processing lifecycle across ingestion, workflow execution, and result publication using object-level identifiers
-- [ ] **OBS-02**: Queue backlog, workflow failure, and service-health signals are visible in dashboards suitable for routine operations
-- [ ] **OBS-03**: Sustained backlog/failure conditions trigger alerts with enough context to triage quickly
+- [x] **OBS-01**: Operators can correlate file processing lifecycle across ingestion, workflow execution, and result publication using object-level identifiers
+- [x] **OBS-02**: Queue backlog, workflow failure, and service-health signals are visible in dashboards suitable for routine operations
+- [x] **OBS-03**: Sustained backlog/failure conditions trigger alerts with enough context to triage quickly
 
 ### Security & Auth
 
@@ -70,9 +70,9 @@
 | RELI-02 | Phase 1 | Complete |
 | RELI-03 | Phase 1 | Complete |
 | RELI-04 | Phase 1 | Complete |
-| OBS-01 | Phase 2 | Pending |
-| OBS-02 | Phase 2 | Pending |
-| OBS-03 | Phase 2 | Pending |
+| OBS-01 | Phase 2 | Complete |
+| OBS-02 | Phase 2 | Complete |
+| OBS-03 | Phase 2 | Complete |
 | SEC-01 | Phase 3 | Pending |
 | SEC-02 | Phase 3 | Pending |
 | SEC-03 | Phase 3 | Pending |
@@ -92,4 +92,4 @@
 
 ---
 *Requirements defined: 2026-02-25*
-*Last updated: 2026-02-25 after phase 1 execution*
+*Last updated: 2026-02-25 after phase 2 execution*

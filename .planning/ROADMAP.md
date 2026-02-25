@@ -41,8 +41,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Implement object-level workflow correlation and status signal propagation
-- [ ] 02-02: Build/validate dashboards and alerts for queue/workflow/service health
+- [x] 02-01: Implement object-level workflow correlation and status signal propagation (completed 2026-02-25)
+- [x] 02-02: Build/validate dashboards and alerts for queue/workflow/service health (completed 2026-02-25)
 
 ### Phase 3: Security & Auth Hardening
 **Goal**: Harden auth and logging paths so credential and mode drift is visible and safe.
@@ -109,7 +109,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Service Health Contracts | 3/3 | Complete   | 2026-02-25 |
-| 2. Workflow Observability Baseline | 0/2 | Complete    | 2026-02-25 |
+| 2. Workflow Observability Baseline | 2/2 | Complete    | 2026-02-25 |
 | 3. Security & Auth Hardening | 0/2 | Not started | - |
 | 4. End-to-End Quality Gates | 0/3 | Not started | - |
 | 5. Operator Experience & Docs | 0/2 | Not started | - |
