@@ -19,6 +19,13 @@ from agents.tasks.dotnet_analyzer import analyze_dotnet_assembly
 from agents.tasks.summarizer import summarize_text
 from agents.tasks.translate import translate_text
 from common.db import get_postgres_connection_str
+from common.health_contract import (
+    build_health_response,
+    dependency_degraded,
+    dependency_failed,
+    dependency_failed_from_exception,
+    dependency_ok,
+)
 from dapr.clients import DaprClient
 
 # from dapr.ext.fastapi import DaprApp # needed if we're doing pub/sub
@@ -752,13 +759,57 @@ async def chatbot_stream_endpoint(request: dict):
 
 @app.api_route("/healthz", methods=["GET", "HEAD"])
 async def health_check():
-    """Health check endpoint."""
+    """Dependency-aware readiness endpoint for agents service."""
+    dependencies = []
     try:
-        if not workflow_runtime or not workflow_client:
-            return {"status": "unhealthy", "error": "Workflow runtime not initialized"}
+        if workflow_runtime and workflow_client:
+            dependencies.append(dependency_ok("workflow-runtime"))
+        else:
+            dependencies.append(
+                dependency_failed(
+                    "workflow-runtime",
+                    "Workflow runtime not initialized",
+                    remediation="Verify agents startup and Dapr workflow client initialization",
+                    logger=logger,
+                    service="agents",
+                )
+            )
 
-        return {"status": "healthy"}
+        auth_status = ModelManager.get_auth_status()
+        if auth_status.get("healthy"):
+            dependencies.append(
+                dependency_ok(
+                    "llm-auth",
+                    detail=f"mode={auth_status.get('mode', 'unknown')}, source={auth_status.get('source', 'unknown')}",
+                )
+            )
+        else:
+            dependencies.append(
+                dependency_degraded(
+                    "llm-auth",
+                    auth_status.get("message", "LLM authentication unavailable"),
+                    remediation="Check agents auth mode configuration and credentials for the current profile",
+                    optional=True,
+                    logger=logger,
+                    service="agents",
+                    context={
+                        "mode": auth_status.get("mode"),
+                        "source": auth_status.get("source"),
+                    },
+                )
+            )
+
+        return build_health_response(service="agents", dependencies=dependencies)
 
     except Exception as e:
         logger.exception(message="Health check failed")
-        return {"status": "unhealthy", "error": str(e)}
+        dependencies.append(
+            dependency_failed_from_exception(
+                "health-check",
+                e,
+                remediation="Inspect agents health check logs",
+                logger=logger,
+                service="agents",
+            )
+        )
+        return build_health_response(service="agents", dependencies=dependencies)

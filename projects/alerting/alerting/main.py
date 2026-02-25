@@ -6,6 +6,13 @@ from contextlib import asynccontextmanager
 import aiohttp
 import apprise
 import common.helpers as helpers
+from common.health_contract import (
+    build_health_response,
+    dependency_degraded,
+    dependency_failed,
+    dependency_failed_from_exception,
+    dependency_ok,
+)
 from common.logger import get_logger
 from common.models import Alert, CloudEvent
 from common.queues import (
@@ -55,7 +62,7 @@ nemesis_url = f"{nemesis_url}/" if not nemesis_url.endswith("/") else nemesis_ur
 with DaprClient() as client:
     secret = client.get_secret(store_name="nemesis-secret-store", key="HASURA_ADMIN_SECRET")
     hasura_admin_secret = secret.secret["HASURA_ADMIN_SECRET"]
-    logger.info(f"[alerting] HASURA_ADMIN_SECRET: {hasura_admin_secret}")
+    logger.info("[alerting] HASURA_ADMIN_SECRET retrieved")
 
 
 def process_apprise_url(url):
@@ -758,5 +765,45 @@ async def get_apprise_info():
 
 @app.api_route("/healthz", methods=["GET", "HEAD"])
 async def healthcheck():
-    """Health check endpoint for Docker healthcheck."""
-    return {"status": "healthy"}
+    """Dependency-aware readiness endpoint for alerting service."""
+    dependencies = []
+    try:
+        if is_initialized:
+            dependencies.append(dependency_ok("apprise"))
+        else:
+            dependencies.append(
+                dependency_failed(
+                    "apprise",
+                    "Alerting service not initialized",
+                    remediation="Check APPRISE_URLS configuration and alerting startup logs",
+                    logger=logger,
+                    service="alerting",
+                )
+            )
+
+        if llm_enabled:
+            dependencies.append(dependency_ok("agents-llm"))
+        else:
+            dependencies.append(
+                dependency_degraded(
+                    "agents-llm",
+                    "Agents service unavailable; LLM triage is disabled",
+                    remediation="Start llm profile or verify agents service readiness",
+                    optional=True,
+                    logger=logger,
+                    service="alerting",
+                )
+            )
+
+        return build_health_response(service="alerting", dependencies=dependencies)
+    except Exception as e:
+        dependencies.append(
+            dependency_failed_from_exception(
+                "health-check",
+                e,
+                remediation="Inspect alerting health check logs",
+                logger=logger,
+                service="alerting",
+            )
+        )
+        return build_health_response(service="alerting", dependencies=dependencies)
