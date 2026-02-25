@@ -59,6 +59,32 @@ If you'd like to install the monitoring services, jupyter notebooks, and/or LLM 
 ```
 `nemesis-ctl.sh` effectively is a wrapper for `docker compose` commands and is in charge of pulling and starting the appropriate published Nemesis docker images. In general, we recommend people use `nemesis-ctl.sh` instead of manually invoking `docker compose`. For more complex deployment scenarios, see Nemesis's [Docker Compose documentation](docker_compose.md) to understand what `nemesis-ctl.sh` does underneath.
 
+### Step 3.1: Validate Startup Readiness Before Using the UI
+
+After starting services, run a profile-aware readiness check with the same profile flags you used for startup:
+
+```bash
+# Base profile
+./tools/nemesis-ctl.sh status prod
+
+# Optional profiles (example)
+./tools/nemesis-ctl.sh status prod --monitoring --jupyter --llm
+```
+
+Readiness matrix states:
+
+- `healthy` means required checks passed.
+- `degraded` means a service is still warming up or an optional dependency is unavailable.
+- `unhealthy` means a required dependency failed and needs remediation before continuing.
+
+If any required service is `unhealthy`, inspect logs and resolve the first failing service before moving on:
+
+```bash
+docker compose logs <service> --tail 80
+```
+
+Only proceed to dashboard workflows after core services report `healthy` (or expected `degraded` for optional profiles).
+
 ### Step 4: Access the Web Dashboard
 
 In a web browser, open `https://localhost:7443/` (or the URL Nemesis is hosted on) to access the main Nemesis web interface. Use `n:n` for basic auth unless you specified users. Upon logging in, you will enter your username and project (this is saved in your browser cache and only needed once):
