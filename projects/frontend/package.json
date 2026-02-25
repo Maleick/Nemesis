@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:smoke": "vitest run src/__tests__/app_navigation_smoke.test.jsx src/__tests__/result_view_smoke.test.jsx"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -37,14 +38,18 @@
     "lodash": ">=4.17.23"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.48",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.17",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.33",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
-    "vite": "^6.3.4"
+    "vite": "^6.3.4",
+    "vitest": "^4.0.18"
   }
 }
