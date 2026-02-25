@@ -47,5 +47,8 @@ jobs:
       - name: Run unit tests
         run: ./tools/test.sh
 
+      - name: Validate readiness contract guard
+        run: ./tools/test.sh --readiness-contract
+
       - name: Run pyright type checks
         run: ./tools/typecheck.sh
