@@ -1,12 +1,14 @@
 # main.py
 import asyncio
 import sys
+from pathlib import Path
 
 import click
 from cli.cobaltstrike_connector.cobaltstrike_connector import run_cobaltstrike_connector
-from cli.config import load_config
+from cli.config import load_connector_config
 from cli.log import setup_logging
 from cli.monitor import monitor_main
+from cli.mythic_connector.config import get_settings
 from cli.mythic_connector.mythic_connector import start
 from cli.stage1_connector.stage1_connector import run_outflank_connector
 from cli.submit import submit_main
@@ -22,6 +24,12 @@ def get_default_config_file(tool_name: str) -> str:
         return "settings_cobaltstrike.yaml"
     else:
         raise ValueError(f"Unknown tool name: {tool_name}")
+
+
+def preflight_validate_mythic_config(config_path: str) -> None:
+    """Validate mythic connector settings without starting the sync loop."""
+    get_settings.cache_clear()
+    get_settings(config_path)
 
 
 # Common options for commands that need config
@@ -63,6 +71,38 @@ def cli():
     pass
 
 
+@cli.command("validate-config")
+@click.option(
+    "--connector",
+    required=True,
+    type=click.Choice(["outflank", "mythic", "cobaltstrike"], case_sensitive=False),
+    help="Connector configuration contract to validate",
+)
+@click.option(
+    "--config",
+    "-c",
+    type=click.Path(exists=True, dir_okay=False, path_type=str),
+    default=None,
+    help="Path to YAML config file (defaults to connector-specific example file)",
+)
+def validate_config(connector: str, config: str | None):
+    """Run connector preflight validation and exit."""
+    connector = connector.lower()
+    config_path = config or get_default_config_file(connector)
+
+    if not Path(config_path).exists():
+        raise click.ClickException(f"Config file not found: {config_path}")
+
+    try:
+        if connector == "mythic":
+            preflight_validate_mythic_config(config_path)
+        else:
+            load_connector_config(config_path, connector)
+        click.echo(f"Config preflight validation passed for connect-{connector}: {click.format_filename(config_path)}")
+    except Exception as e:
+        raise click.ClickException(f"Config preflight validation failed for connect-{connector}: {e}") from e
+
+
 @cli.command()
 @connector_options("outflank")
 def connect_outflank(config: str, debug: bool, showconfig: bool):
@@ -79,7 +119,8 @@ def connect_outflank(config: str, debug: bool, showconfig: bool):
         abs_path = click.format_filename(config)
 
         logger.info("Starting Outflank connector using the config file: %s", abs_path)
-        cfg = load_config(config)
+        cfg = load_connector_config(config, "outflank")
+        logger.info("Config preflight validation passed for connect-outflank")
         asyncio.run(run_outflank_connector(cfg, logger))
     except Exception as e:
         logger.exception("Unhandled exception in connector", e)
@@ -97,6 +138,8 @@ def connect_mythic(config: str, debug: bool, showconfig: bool) -> None:
         sys.exit(0)
 
     try:
+        preflight_validate_mythic_config(config)
+        click.echo(f"Config preflight validation passed for connect-mythic: {click.format_filename(config)}")
         asyncio.run(start(config, debug))
     except KeyboardInterrupt:
         click.echo("Interrupted by user, shutting down...")
@@ -121,7 +164,8 @@ def connect_cobaltstrike(config: str, debug: bool, showconfig: bool):
         abs_path = click.format_filename(config)
 
         logger.info("Starting Cobalt Strike connector using the config file: %s", abs_path)
-        cfg = load_config(config)
+        cfg = load_connector_config(config, "cobaltstrike")
+        logger.info("Config preflight validation passed for connect-cobaltstrike")
         asyncio.run(run_cobaltstrike_connector(cfg, logger))
     except Exception as e:
         logger.exception("Unhandled exception in connector", e)

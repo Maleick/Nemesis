@@ -2,6 +2,9 @@ cache_db_path: "/tmp/nemesis_connectors"
 conn_timeout_sec: 5
 validate_https_certs: false
 
+# Preflight check:
+# uv run python -m cli.main validate-config --connector cobaltstrike --config settings_cobaltstrike.yaml
+
 nemesis:
   url: "https://nemesis.example.com"
   credential:

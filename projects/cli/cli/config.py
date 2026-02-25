@@ -131,3 +131,53 @@ def load_config(config_path: str) -> Config:
     with open(config_path) as f:
         config_dict = yaml.safe_load(f)
     return Config(**config_dict)
+
+
+CONNECTOR_ALIASES = {
+    "outflank": "outflank",
+    "connect-outflank": "outflank",
+    "connect_outflank": "outflank",
+    "mythic": "mythic",
+    "connect-mythic": "mythic",
+    "connect_mythic": "mythic",
+    "cobaltstrike": "cobaltstrike",
+    "connect-cobaltstrike": "cobaltstrike",
+    "connect_cobaltstrike": "cobaltstrike",
+}
+
+
+def resolve_connector_name(connector: str) -> str:
+    """Normalize connector names from CLI command aliases to Config field names."""
+    key = connector.strip().lower()
+    if key not in CONNECTOR_ALIASES:
+        valid = ", ".join(sorted(CONNECTOR_ALIASES))
+        raise ValueError(f"Unknown connector '{connector}'. Expected one of: {valid}")
+    return CONNECTOR_ALIASES[key]
+
+
+def validate_connector_config(config: Config, connector: str) -> None:
+    """Validate connector section presence and critical connector-specific fields."""
+    connector_name = resolve_connector_name(connector)
+    connector_entries = getattr(config, connector_name)
+
+    if not connector_entries:
+        raise ValueError(
+            f"Config preflight failed: no '{connector_name}' connector entries were found in the YAML file."
+        )
+
+    if connector_name == "outflank":
+        for idx, outflank_cfg in enumerate(connector_entries):
+            if outflank_cfg.downloads_dir_path is not None and not str(outflank_cfg.downloads_dir_path).strip():
+                raise ValueError(f"Config preflight failed: outflank[{idx}].downloads_dir_path cannot be empty.")
+
+    if connector_name == "cobaltstrike":
+        for idx, cobalt_cfg in enumerate(connector_entries):
+            if not cobalt_cfg.project.strip():
+                raise ValueError(f"Config preflight failed: cobaltstrike[{idx}].project cannot be empty.")
+
+
+def load_connector_config(config_path: str, connector: str) -> Config:
+    """Load config and run connector-specific preflight checks."""
+    config = load_config(config_path)
+    validate_connector_config(config, connector)
+    return config

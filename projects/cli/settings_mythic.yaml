@@ -1,5 +1,8 @@
 project: "ASSESS-TEST"
 
+# Preflight check:
+# uv run python -m cli.main validate-config --connector mythic --config settings_mythic.yaml
+
 mythic:
   url: "https://mythic.local:7443"
 
