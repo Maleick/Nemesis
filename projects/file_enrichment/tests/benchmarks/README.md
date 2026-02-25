@@ -44,6 +44,31 @@ uv run pytest tests/benchmarks/ --benchmark-only --benchmark-save=my_results
 uv run pytest tests/benchmarks/ --benchmark-only --benchmark-compare=my_results
 ```
 
+## Workflow Throughput Baseline and Guardrails
+
+Use this baseline/compare workflow when evaluating throughput tuning changes:
+
+1. Capture baseline:
+
+```bash
+uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-save=phase6_baseline
+```
+
+2. Apply tuning changes (for example, `ENRICHMENT_MAX_PARALLEL_WORKFLOWS` or `DOCUMENTCONVERSION_MAX_PARALLEL_WORKFLOWS` adjustments).
+
+3. Compare against baseline:
+
+```bash
+uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-compare=phase6_baseline
+```
+
+4. Validate queue-level impact using production-like workloads before claiming throughput improvement.
+
+Important scope note:
+
+- `bench_basic_analysis.py` is a micro-benchmark for the basic analysis path.
+- Use benchmark results as a guardrail signal, not as proof of full end-to-end workflow throughput on their own.
+
 ## Available Benchmarks
 
 ### bench_basic_analysis.py

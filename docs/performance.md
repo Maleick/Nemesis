@@ -34,6 +34,30 @@ In RabbitMQ, `Ready` counts signify messages waiting to be processed and the `de
 
 If the queue message rates are too slow, you can adjust some settings to try and increase performance. The following sections detail the best bang-for-the-buck service-specific adjustments you can make.
 
+## Throughput Baseline Workflow (Before Tuning)
+
+Before changing worker counts or resource limits, capture a repeatable baseline from the file enrichment benchmark harness:
+
+```bash
+cd /opt/Nemesis/projects/file_enrichment
+uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-save=phase6_baseline
+```
+
+After making tuning changes, compare current results to your saved baseline:
+
+```bash
+cd /opt/Nemesis/projects/file_enrichment
+uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-compare=phase6_baseline
+```
+
+Interpretation guardrails:
+
+- `bench_basic_analysis.py` measures a focused part of file enrichment (`process_basic_analysis`) and is not an end-to-end throughput measurement by itself.
+- Treat benchmark deltas as one signal, then confirm queue drain and service health with production-like workload telemetry.
+- When tuning worker counts, tie your benchmark comparison to queue-level changes for:
+  - `ENRICHMENT_MAX_PARALLEL_WORKFLOWS` (file_enrichment)
+  - `DOCUMENTCONVERSION_MAX_PARALLEL_WORKFLOWS` (document_conversion)
+
 ### file_enrichment
 Every uploaded file is first placed on the `files-new_file` queue. The file_enrichment service consumes files from the queue and processes each one with the [applicable enrichment modules](https://github.com/SpecterOps/Nemesis/tree/main/libs/file_enrichment_modules). To improve file_enrichment performance, analyze its CPU usage with `docker compose stats file-enrichment` or in the "Docker Monitoring" dashboard in Grafana. 
 
@@ -61,5 +85,4 @@ If this is the case, first try increasing the number of scheduler instances ([ex
 Additional resources:
 - [Tuning Dapr Scheduler for Production](https://www.diagrid.io/blog/tuning-dapr-scheduler-for-production)
 - [Dapr Scheduler control plane service overview](https://docs.dapr.io/concepts/dapr-services/scheduler/)
-
 

@@ -15,6 +15,24 @@ import magic
 import pytest
 from common.helpers import get_file_extension, is_container
 
+BENCHMARK_SCOPE_NOTE = (
+    "bench_basic_analysis measures the basic-analysis hot path only and is not a full end-to-end workflow throughput test."
+)
+
+
+@pytest.fixture
+def get_file_path():
+    """Return fixture file paths used by benchmark scenarios."""
+    fixtures_dir = pathlib.Path(__file__).resolve().parent.parent / "fixtures"
+
+    def _resolve(name: str) -> pathlib.Path:
+        fixture_path = fixtures_dir / name
+        if not fixture_path.exists():
+            raise FileNotFoundError(f"Benchmark fixture not found: {fixture_path}")
+        return fixture_path
+
+    return _resolve
+
 
 def process_basic_analysis(temp_file_path: str, file_dict: dict) -> dict:
     """
@@ -66,6 +84,8 @@ class TestBasicAnalysisBenchmarks:
 
     def test_single_text_file_analysis(self, benchmark, get_file_path):
         """Benchmark analyzing a single text file."""
+        benchmark.extra_info["scope"] = BENCHMARK_SCOPE_NOTE
+
         # Use existing fixture file
         fixture_path = get_file_path("sample.txt")
 
