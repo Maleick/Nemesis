@@ -1,5 +1,18 @@
 # Nemesis Platform Evolution
 
+## Current State
+
+- **Shipped milestone:** `v1.0` on 2026-02-25
+- **Delivery footprint:** 6 phases, 14 plans, 42 tasks
+- **Release highlights:** deterministic service health contracts, workflow observability baseline, auth/logging hardening, CI quality gates, operator doc/runbook alignment, and extension/performance guardrails
+- **Historical records:** `.planning/milestones/v1.0-ROADMAP.md`, `.planning/milestones/v1.0-REQUIREMENTS.md`, `.planning/MILESTONES.md`
+
+## Next Milestone Goals
+
+- Define v1.1 roadmap and requirements based on production/operator feedback.
+- Prioritize open scale/platform requirements (`SCALE-*`) and advanced analysis requirements (`AI-*`) from the v2 backlog as candidates.
+- Keep secret-safe, verification-first workflow patterns as default constraints.
+
 ## What This Is
 
 Nemesis is an open-source, Docker-first offensive security data processing platform that ingests files from collection sources, enriches them through asynchronous pipelines, and exposes analyst workflows through API/UI surfaces. It is built as a polyglot service stack centered on Python services, Dapr pub/sub/workflows, PostgreSQL, MinIO, and optional LLM-assisted triage/chatbot capabilities.
@@ -57,6 +70,7 @@ Turn collected offensive-operations artifacts into actionable, trustworthy findi
 | Treat this as brownfield milestone planning, not greenfield product discovery | Existing capabilities are substantial and must be preserved while improving reliability | — Pending |
 | Use balanced model profile with research + plan-check + verifier enabled | Good quality/cost tradeoff for multi-phase planning and verification | — Pending |
 | Keep workflow mode interactive (auto-advance disabled) | Matches local preference for plan-led execution and explicit review points | — Pending |
+| Completion of v1.0 milestone accepted without standalone milestone-audit artifact | User selected proceed-anyway completion path at close; known gap recorded in milestone history | Accepted |
 
 ---
-*Last updated: 2026-02-25 after GSD project initialization*
+*Last updated: 2026-02-25 after v1.0 milestone completion*

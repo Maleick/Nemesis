@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: unknown
-last_updated: "2026-02-25T20:48:25.621Z"
+status: between_milestones
+last_updated: "2026-02-25T21:24:00Z"
 progress:
   total_phases: 6
   completed_phases: 6
@@ -15,73 +15,43 @@ progress:
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-25)
+See: `.planning/PROJECT.md` (updated 2026-02-25)
 
-**Core value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.
-**Current focus:** Security & Auth Hardening
+**Core value:** Turn collected offensive-operations artifacts into actionable, trustworthy findings quickly and safely.  
+**Current focus:** Start v1.1 milestone definition and requirements.
 
 ## Current Position
 
-Phase: 3 of 6 (Security & Auth Hardening)
-Plan: 0 of 2 in current phase
-Status: Phase 2 complete and verified; ready for Phase 3 planning
-Last activity: 2026-02-25 — Completed phase 2 workflow observability baseline (02-01, 02-02, 02-VERIFICATION)
+Milestone `v1.0` is complete and archived.
 
-Progress: [███░░░░░░░] 33%
+- Roadmap archive: `.planning/milestones/v1.0-ROADMAP.md`
+- Requirements archive: `.planning/milestones/v1.0-REQUIREMENTS.md`
+- UAT coverage: Phase 6 UAT complete (`5 passed, 0 issues`)
 
-## Performance Metrics
+## Completion Snapshot
 
-**Velocity:**
-- Total plans completed: 5
-- Average duration: 8.8 min
-- Total execution time: 0.7 hours
-
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1 | 3 | 8 min | 2.7 min |
-| 2 | 2 | 36 min | 18.0 min |
-
-**Recent Trend:**
-- Last 5 plans: 2 min, 3 min, 3 min, 22 min, 14 min
-- Trend: Increasing complexity (expected for observability implementation)
-
-*Updated after each plan completion*
-| Phase 1 P01 | 2 min | 3 tasks | 4 files |
-| Phase 1 P02 | 3 min | 3 tasks | 7 files |
-| Phase 1 P03 | 3 min | 3 tasks | 5 files |
-| Phase 2 P01 | 22 min | 3 tasks | 5 files |
-| Phase 2 P02 | 14 min | 3 tasks | 4 files |
-| Phase 04 P01 | 3 min | 3 tasks | 5 files |
-| Phase 04 P02 | 6 min | 3 tasks | 9 files |
-| Phase 04 P03 | 5 min | 3 tasks | 8 files |
+- Phases: `6/6` complete
+- Plans: `14/14` complete
+- Tasks: `42` completed
+- Milestone close commit range: `9cdab67..c84e198`
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Init]: Brownfield hardening cycle chosen over greenfield redesign
-- [Init]: Interactive planning mode with research/check/verifier enabled
-- [Phase 1]: Adopted a shared readiness contract with legacy status compatibility — Standardizes service health semantics without breaking existing consumers
-- [Phase 1]: Classified LLM auth availability as degraded optional dependency — Keeps base profile healthy while surfacing profile-specific readiness issues
-- [Phase 1]: Added startup readiness matrix and CI readiness guard — Operationalizes health contract verification for operators and pull requests
-- [Phase 2]: Added object-level lifecycle correlation and observability summary APIs — Enables deterministic operator traceability by object_id and signal severity
-- [Phase 2]: Added sustained-condition alert evaluator with cooldown gating — Reduces alert noise while preserving actionable operational escalations
+- Adopted verification-first phase execution with explicit per-phase verification artifacts (`*-VERIFICATION.md`).
+- Maintained docs-as-contract pattern for operator and extension workflows with deterministic guard scripts.
+- Accepted milestone close without a separate `v1.0` milestone-audit artifact; recorded as known gap in `MILESTONES.md`.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+- No active implementation blockers.
+- Next milestone planning must create fresh `.planning/REQUIREMENTS.md`.
 
 ## Session Continuity
 
-Last session: 2026-02-25 12:46
-Stopped at: Completed 02-VERIFICATION.md
-Resume file: None
+Last major action: Milestone archival + UAT completion for Phase 6 on 2026-02-25.
