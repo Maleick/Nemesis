@@ -55,6 +55,24 @@ run_backend_smoke_tests() {
     echo "Backend smoke suite passed."
 }
 
+run_queue_contract_tests() {
+    echo "Running queue contract suites..."
+    (
+        cd "$BASE_DIR/projects/web_api"
+        uv run pytest tests/test_queue_topic_contracts.py -q
+    )
+    (
+        cd "$BASE_DIR/projects/file_enrichment"
+        uv run pytest tests/test_queue_topic_contracts.py -q
+    )
+    (
+        cd "$BASE_DIR/projects/alerting"
+        uv run pytest tests/test_queue_topic_contracts.py -q
+    )
+    echo ""
+    echo "Queue contract suites passed."
+}
+
 # Get the absolute path to the project root (one level up from the tools folder)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
@@ -78,6 +96,17 @@ if [ "${1:-}" = "--smoke-backend" ]; then
         exit 1
     fi
     run_backend_smoke_tests
+    exit 0
+fi
+
+if [ "${1:-}" = "--queue-contract" ]; then
+    shift
+    if [ "$#" -gt 0 ]; then
+        echo "Unknown option(s): $*"
+        echo "Usage: $0 [--readiness-contract|--smoke-backend|--queue-contract]"
+        exit 1
+    fi
+    run_queue_contract_tests
     exit 0
 fi
 

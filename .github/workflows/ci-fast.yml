@@ -62,5 +62,8 @@ jobs:
       - name: Run frontend smoke and build
         run: cd projects/frontend && npm run test:smoke && npm run build
 
+      - name: Run queue contract gate
+        run: ./tools/test.sh --queue-contract
+
       - name: Run pyright type checks
         run: ./tools/typecheck.sh
