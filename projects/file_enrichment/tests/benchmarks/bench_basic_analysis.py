@@ -18,6 +18,9 @@ from common.helpers import get_file_extension, is_container
 BENCHMARK_SCOPE_NOTE = (
     "bench_basic_analysis measures the basic-analysis hot path only and is not a full end-to-end workflow throughput test."
 )
+THROUGHPUT_EVIDENCE_NOTE = (
+    "Use benchmark-save/benchmark-compare results with queue-drain telemetry and policy status snapshot evidence before claiming throughput gains."
+)
 
 
 @pytest.fixture
@@ -85,6 +88,7 @@ class TestBasicAnalysisBenchmarks:
     def test_single_text_file_analysis(self, benchmark, get_file_path):
         """Benchmark analyzing a single text file."""
         benchmark.extra_info["scope"] = BENCHMARK_SCOPE_NOTE
+        benchmark.extra_info["evidence_contract"] = THROUGHPUT_EVIDENCE_NOTE
 
         # Use existing fixture file
         fixture_path = get_file_path("sample.txt")
