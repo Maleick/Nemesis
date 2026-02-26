@@ -12,7 +12,7 @@ v1.1 builds on the v1.0 hardening baseline by adding measurable workflow through
 ## Phases
 
 - [x] **Phase 7: Throughput Controls & Workload Policies** - Add measurable throughput targets and policy-driven throttling for expensive workloads. (completed 2026-02-26)
-- [ ] **Phase 8: Capacity & Multi-Node Operations** - Provide executable multi-node deployment and capacity runbooks with validation checks.
+- [x] **Phase 8: Capacity & Multi-Node Operations** - Provide executable multi-node deployment and capacity runbooks with validation checks. (completed 2026-02-26)
 - [ ] **Phase 9: AI Governance & Cost Controls** - Implement confidence-aware AI triage policy controls and budget-governed operational signals.
 
 ## Phase Details
@@ -55,7 +55,7 @@ Phases execute in numeric order: 7 -> 8 -> 9
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 7. Throughput Controls & Workload Policies | 0/0 | Complete    | 2026-02-26 |
-| 8. Capacity & Multi-Node Operations | 0/0 | Not started | - |
+| 8. Capacity & Multi-Node Operations | 0/0 | Complete    | 2026-02-26 |
 | 9. AI Governance & Cost Controls | 0/0 | Not started | - |
 
 ## Next Up
