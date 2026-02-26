@@ -69,7 +69,7 @@ chmod +x "$FAKE_BIN/docker"
 assert_contains() {
   local file="$1"
   local pattern="$2"
-  if ! rg -q "$pattern" "$file"; then
+  if ! rg -q -- "$pattern" "$file"; then
     echo "Expected pattern '$pattern' in $file" >&2
     exit 1
   fi
@@ -78,7 +78,7 @@ assert_contains() {
 assert_not_contains() {
   local file="$1"
   local pattern="$2"
-  if rg -q "$pattern" "$file"; then
+  if rg -q -- "$pattern" "$file"; then
     echo "Did not expect pattern '$pattern' in $file" >&2
     exit 1
   fi
@@ -88,6 +88,12 @@ run_status_case() {
   local label="$1"
   shift
   PATH="$FAKE_BIN:$PATH" bash "$NEMESIS_CTL" status "$@" > "$TMP_DIR/$label.out"
+}
+
+run_capacity_case() {
+  local label="$1"
+  shift
+  PATH="$FAKE_BIN:$PATH" bash "$NEMESIS_CTL" capacity-profile "$@" --capacity-validate > "$TMP_DIR/$label.out"
 }
 
 run_status_case base dev
@@ -106,5 +112,11 @@ assert_not_contains "$TMP_DIR/monitoring.out" "agents"
 run_status_case llm dev --llm
 assert_contains "$TMP_DIR/llm.out" "Overall readiness: healthy"
 assert_contains "$TMP_DIR/llm.out" "agents"
+
+run_capacity_case capacity prod --capacity-mode scale-out --llm
+assert_contains "$TMP_DIR/capacity.out" "Capacity profile: scale-out"
+assert_contains "$TMP_DIR/capacity.out" "--monitoring --llm"
+assert_contains "$TMP_DIR/capacity.out" "Validation checks: passed"
+assert_contains "$TMP_DIR/capacity.out" "file-enrichment-1"
 
 echo "nemesis-ctl profile smoke tests passed"
