@@ -73,6 +73,16 @@ run_queue_contract_tests() {
     echo "Queue contract suites passed."
 }
 
+run_capacity_contract_tests() {
+    echo "Running capacity profile contract suite..."
+    (
+        cd "$BASE_DIR"
+        bash tools/tests/test_capacity_profile_contracts.sh
+    )
+    echo ""
+    echo "Capacity profile contract suite passed."
+}
+
 # Get the absolute path to the project root (one level up from the tools folder)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
@@ -107,6 +117,17 @@ if [ "${1:-}" = "--queue-contract" ]; then
         exit 1
     fi
     run_queue_contract_tests
+    exit 0
+fi
+
+if [ "${1:-}" = "--capacity-contract" ]; then
+    shift
+    if [ "$#" -gt 0 ]; then
+        echo "Unknown option(s): $*"
+        echo "Usage: $0 [--readiness-contract|--smoke-backend|--queue-contract|--capacity-contract]"
+        exit 1
+    fi
+    run_capacity_contract_tests
     exit 0
 fi
 
