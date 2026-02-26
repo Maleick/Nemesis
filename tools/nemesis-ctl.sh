@@ -17,6 +17,8 @@ Actions:
   status          Show profile-aware readiness status for core services.
   stop            Stop and remove services (containers and networks).
   clean           Stop and remove services AND delete associated data volumes.
+  capacity-profile
+                  Show deterministic capacity profile guidance and validation checks.
   throughput-policy
                   Manage queue-pressure throughput policy presets and TTL overrides via API.
 
@@ -40,6 +42,10 @@ Options:
                   API base URL for throughput policy endpoints (default: https://nemesis:7443/api).
   --telemetry-stale
                   Force fail-safe conservative policy mode when evaluating status.
+  --capacity-mode <mode>
+                  Capacity profile mode: baseline | observability | scale-out.
+  --capacity-validate
+                  Run capacity profile contract checks against compose placeholders.
 
 Examples:
   # Start production services with monitoring
@@ -62,6 +68,9 @@ Examples:
 
   # Apply aggressive policy override for 20 minutes
   $0 throughput-policy prod --policy-override --preset aggressive --ttl 20
+
+  # Show capacity profile guidance and run validation checks
+  $0 capacity-profile prod --capacity-mode scale-out --capacity-validate
 EOF
   exit 1
 }
@@ -84,8 +93,8 @@ ENVIRONMENT=$1
 shift
 
 # Validate action
-if [[ "$ACTION" != "start" && "$ACTION" != "status" && "$ACTION" != "stop" && "$ACTION" != "clean" && "$ACTION" != "throughput-policy" ]]; then
-  echo "Error: Invalid action '$ACTION'. Must be 'start', 'status', 'stop', 'clean', or 'throughput-policy'." >&2
+if [[ "$ACTION" != "start" && "$ACTION" != "status" && "$ACTION" != "stop" && "$ACTION" != "clean" && "$ACTION" != "capacity-profile" && "$ACTION" != "throughput-policy" ]]; then
+  echo "Error: Invalid action '$ACTION'. Must be 'start', 'status', 'stop', 'clean', 'capacity-profile', or 'throughput-policy'." >&2
   echo "" >&2
   usage
 fi
@@ -106,6 +115,8 @@ THROUGHPUT_PRESET="${THROUGHPUT_POLICY_PRESET:-balanced}"
 THROUGHPUT_TTL_MINUTES=30
 THROUGHPUT_API_BASE="${NEMESIS_API_BASE_URL:-https://nemesis:7443/api}"
 THROUGHPUT_TELEMETRY_STALE=false
+CAPACITY_MODE="${NEMESIS_CAPACITY_MODE:-baseline}"
+CAPACITY_VALIDATE=false
 
 # Parse optional flags
 while [[ "$#" -gt 0 ]]; do
@@ -143,6 +154,15 @@ while [[ "$#" -gt 0 ]]; do
       shift 2
       ;;
     --telemetry-stale) THROUGHPUT_TELEMETRY_STALE=true; shift ;;
+    --capacity-mode)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --capacity-mode requires a value." >&2
+        exit 1
+      fi
+      CAPACITY_MODE="$2"
+      shift 2
+      ;;
+    --capacity-validate) CAPACITY_VALIDATE=true; shift ;;
     *) echo "Unknown option: $1" >&2; echo "" >&2; usage ;;
   esac
 done
@@ -166,6 +186,16 @@ if [ "$ACTION" = "throughput-policy" ]; then
     echo "Error: --ttl must be a positive integer number of minutes." >&2
     exit 1
   fi
+fi
+
+if [ "$ACTION" = "capacity-profile" ]; then
+  case "$CAPACITY_MODE" in
+    baseline|observability|scale-out) ;;
+    *)
+      echo "Error: --capacity-mode must be one of: baseline, observability, scale-out." >&2
+      exit 1
+      ;;
+  esac
 fi
 
 # --- Main Logic ---
@@ -229,6 +259,23 @@ compose_cmd() {
   else
     "${CMD_PREFIX[@]}" "${DOCKER_CMD[@]}" "$@"
   fi
+}
+
+build_profile_flags() {
+  local include_monitoring="$1"
+  local include_jupyter="$2"
+  local include_llm="$3"
+  local flags=""
+  if [ "$include_monitoring" = "true" ]; then
+    flags="$flags --monitoring"
+  fi
+  if [ "$include_jupyter" = "true" ]; then
+    flags="$flags --jupyter"
+  fi
+  if [ "$include_llm" = "true" ]; then
+    flags="$flags --llm"
+  fi
+  echo "$flags"
 }
 
 throughput_override_file() {
@@ -352,6 +399,73 @@ run_throughput_policy() {
   render_throughput_status "$response"
 }
 
+run_capacity_profile() {
+  local mode="$CAPACITY_MODE"
+  local include_monitoring="$MONITORING"
+
+  if [ "$mode" = "observability" ] || [ "$mode" = "scale-out" ]; then
+    include_monitoring=true
+  fi
+
+  local profile_flags
+  profile_flags="$(build_profile_flags "$include_monitoring" "$JUPYTER" "$LLM")"
+
+  echo "--- Capacity Profile Guidance ---"
+  echo "Environment:      $ENVIRONMENT"
+  echo "Capacity profile: $mode"
+  echo "Profile flags:    ${profile_flags:-<none>}"
+  echo ""
+  echo "Start command:"
+  echo "  ./tools/nemesis-ctl.sh start $ENVIRONMENT$profile_flags"
+  echo "Readiness check:"
+  echo "  ./tools/nemesis-ctl.sh status $ENVIRONMENT$profile_flags"
+  echo "Stop command:"
+  echo "  ./tools/nemesis-ctl.sh stop $ENVIRONMENT$profile_flags"
+  echo ""
+
+  if [ "$mode" = "scale-out" ]; then
+    echo "Scale-out checklist:"
+    echo "  1. Enable file-enrichment replica stanzas in compose.yaml (file-enrichment-1/2/3 + sidecars)."
+    echo "  2. If using local prod builds, mirror replica enablement in compose.prod.build.yaml."
+    echo "  3. Tune worker env vars:"
+    echo "       ENRICHMENT_MAX_PARALLEL_WORKFLOWS"
+    echo "       DOCUMENTCONVERSION_MAX_PARALLEL_WORKFLOWS"
+    echo "  4. Capture evidence:"
+    echo "       ./tools/nemesis-ctl.sh status $ENVIRONMENT$profile_flags"
+    echo "       ./tools/test.sh --capacity-contract"
+    echo "       queue-drain and benchmark compare results"
+    echo ""
+  fi
+
+  if [ "$CAPACITY_VALIDATE" = "true" ]; then
+    local failed=0
+    local required_patterns=(
+      "file-enrichment-1"
+      "file-enrichment-2"
+      "file-enrichment-3"
+    )
+    local required_files=(
+      "compose.yaml"
+      "compose.prod.build.yaml"
+    )
+
+    for compose_file in "${required_files[@]}"; do
+      for pattern in "${required_patterns[@]}"; do
+        if ! rg -q "$pattern" "$compose_file"; then
+          echo "Validation: missing '$pattern' in $compose_file" >&2
+          failed=1
+        fi
+      done
+    done
+
+    if [ "$failed" -ne 0 ]; then
+      echo "Validation checks: failed" >&2
+      return 1
+    fi
+    echo "Validation checks: passed"
+  fi
+}
+
 run_readiness_matrix() {
   local -a services=("web-api" "file-enrichment" "document-conversion" "alerting")
   local profile_flags=""
@@ -432,6 +546,9 @@ run_readiness_matrix() {
 # 3. Handle Action
 if [ "$ACTION" = "throughput-policy" ]; then
   run_throughput_policy
+  exit $?
+elif [ "$ACTION" = "capacity-profile" ]; then
+  run_capacity_profile
   exit $?
 elif [ "$ACTION" = "status" ]; then
   run_readiness_matrix
