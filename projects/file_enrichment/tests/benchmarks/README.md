@@ -62,7 +62,8 @@ uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchm
 uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-compare=phase6_baseline
 ```
 
-4. Validate queue-level impact using production-like workloads before claiming throughput improvement.
+4. Validate queue-drain impact using production-like workloads before claiming throughput improvement.
+5. Capture operator status snapshot evidence from throughput-policy controls (`nemesis-ctl.sh throughput-policy ... --policy-status`) alongside benchmark comparison output.
 
 Important scope note:
 

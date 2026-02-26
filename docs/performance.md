@@ -58,6 +58,46 @@ Interpretation guardrails:
   - `ENRICHMENT_MAX_PARALLEL_WORKFLOWS` (file_enrichment)
   - `DOCUMENTCONVERSION_MAX_PARALLEL_WORKFLOWS` (document_conversion)
 
+## Throughput Policy Controls, Evidence, and Rollback
+
+When applying throughput controls, use named presets and capture a status snapshot before and after each change:
+
+```bash
+./tools/nemesis-ctl.sh throughput-policy prod --policy-status --preset balanced
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset conservative
+./tools/nemesis-ctl.sh throughput-policy prod --policy-override --preset aggressive --ttl 20
+```
+
+### Acceptance Evidence Bundle (Required)
+
+1. Benchmark evidence:
+   - `uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-save=<name>`
+   - `uv run pytest tests/benchmarks/bench_basic_analysis.py --benchmark-only --benchmark-compare=<name>`
+2. Queue-drain evidence:
+   - collect queue-drain metrics from `/api/workflows/observability/summary` and `/api/queues`
+3. Operator status snapshot evidence:
+   - capture throughput-policy status snapshot from `nemesis-ctl throughput-policy --policy-status`
+
+Throughput changes pass only when the evidence bundle shows no critical regressions and at least one measurable KPI improvement for the stress profile under test.
+
+### Rollback Triggers and Revert Path
+
+Trigger rollback when any of the following occur:
+
+- queue-drain time worsens materially under the same stress profile
+- service health transitions to sustained `critical`
+- expensive workload throttling starves baseline workflows contrary to policy floor expectations
+
+Revert path:
+
+```bash
+# Clear temporary override and return to baseline preset
+./tools/nemesis-ctl.sh throughput-policy prod --policy-clear --preset balanced
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset balanced
+```
+
+Record the revert command output and post-revert status snapshot with the benchmark comparison results.
+
 ### file_enrichment
 Every uploaded file is first placed on the `files-new_file` queue. The file_enrichment service consumes files from the queue and processes each one with the [applicable enrichment modules](https://github.com/SpecterOps/Nemesis/tree/main/libs/file_enrichment_modules). To improve file_enrichment performance, analyze its CPU usage with `docker compose stats file-enrichment` or in the "Docker Monitoring" dashboard in Grafana. 
 
@@ -85,4 +125,3 @@ If this is the case, first try increasing the number of scheduler instances ([ex
 Additional resources:
 - [Tuning Dapr Scheduler for Production](https://www.diagrid.io/blog/tuning-dapr-scheduler-for-production)
 - [Dapr Scheduler control plane service overview](https://docs.dapr.io/concepts/dapr-services/scheduler/)
-

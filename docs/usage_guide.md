@@ -237,6 +237,35 @@ For consistent operations triage, run this sequence in order:
 
 This aligns usage guidance with the troubleshooting runbook and keeps triage steps reproducible.
 
+### Throughput-Policy Controls (CLI + API)
+
+Nemesis exposes throughput-policy controls through API-backed `nemesis-ctl` workflows:
+
+```bash
+# status snapshot for current preset
+./tools/nemesis-ctl.sh throughput-policy prod --policy-status --preset balanced
+
+# apply preset immediately
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset conservative
+
+# apply temporary override (TTL minutes)
+./tools/nemesis-ctl.sh throughput-policy prod --policy-override --preset aggressive --ttl 20
+```
+
+Recommended evidence flow for each policy change:
+
+1. Capture pre-change status snapshot.
+2. Run benchmark baseline/compare workflow.
+3. Capture queue-drain metrics from observability endpoints.
+4. Capture post-change status snapshot.
+
+If results regress, execute rollback/revert commands:
+
+```bash
+./tools/nemesis-ctl.sh throughput-policy prod --policy-clear --preset balanced
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset balanced
+```
+
 ### Backend Smoke Gate
 
 Run the backend critical-path smoke gate locally with:

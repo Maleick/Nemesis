@@ -68,6 +68,28 @@ Use this sequence to keep triage deterministic across operators:
 
 This order keeps startup, queue/workflow context, object-level correlation, and service-level diagnostics aligned.
 
+## Throughput-Policy Triage and Rollback
+
+When queue pressure is sustained, use the throughput-policy control surface first so operators follow the same preset/override flow:
+
+```bash
+# Inspect policy status snapshot
+./tools/nemesis-ctl.sh throughput-policy prod --policy-status --preset balanced
+
+# Apply a temporary override with TTL
+./tools/nemesis-ctl.sh throughput-policy prod --policy-override --preset conservative --ttl 15
+```
+
+If throughput KPIs regress, perform rollback immediately:
+
+```bash
+# rollback/revert to baseline mode
+./tools/nemesis-ctl.sh throughput-policy prod --policy-clear --preset balanced
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset balanced
+```
+
+Capture queue-drain evidence and the post-rollback status snapshot for incident notes.
+
 ## Analyze Message Queues
 
 Nemesis uses message queue in its enrichment workflows. To quickly get an overview of the state of the queues, view the "Enrichment Queues" section in Nemesis's dashboard:
