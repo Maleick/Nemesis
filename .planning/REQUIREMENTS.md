@@ -13,8 +13,8 @@
 
 ### AI Governance
 
-- [ ] **AI-01**: AI triage outputs expose confidence-aware policy mode and preserve explicit operator override controls.
-- [ ] **AI-02**: Operators can monitor AI usage/cost governance signals with budget-oriented warning states.
+- [x] **AI-01**: AI triage outputs expose confidence-aware policy mode and preserve explicit operator override controls.
+- [x] **AI-02**: Operators can monitor AI usage/cost governance signals with budget-oriented warning states.
 
 ## v2 Requirements
 
@@ -43,8 +43,8 @@
 | SCALE-01 | Phase 7 | Pending |
 | SCALE-02 | Phase 7 | Pending |
 | SCALE-03 | Phase 8 | Pending |
-| AI-01 | Phase 9 | Pending |
-| AI-02 | Phase 9 | Pending |
+| AI-01 | Phase 9 | Complete |
+| AI-02 | Phase 9 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 5 total
