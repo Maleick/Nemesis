@@ -56,6 +56,9 @@ jobs:
       - name: Run profile readiness smoke contracts
         run: bash tools/tests/test_nemesis_ctl_profiles.sh
 
+      - name: Run capacity contract gate
+        run: ./tools/test.sh --capacity-contract
+
       - name: Install frontend dependencies
         run: cd projects/frontend && npm ci
 
