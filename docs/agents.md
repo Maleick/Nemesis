@@ -45,6 +45,26 @@ To switch back to fallback mode safely:
 
 ***Note:*** service keys/tokens/etc. should be configured in your `.env` file and can be referenced in `./infra/litellm/config.yml`.
 
+## AI Governance Policy Context
+
+Nemesis AI synthesis and triage responses now include confidence-aware policy metadata so operators can audit behavior without inspecting raw traces:
+
+- `policy_mode`
+- `confidence_score` and `confidence_band`
+- `override.requested`, `override.requested_mode`, `override.applied_mode`, `override.reason`, and `override.source`
+
+When operators need stricter handling for a specific synthesis request, pass an override through API query params:
+
+```bash
+curl -k -u n:n -X POST \
+  "https://nemesis:7443/api/reports/system/synthesize?policy_mode=strict_review&policy_override_reason=incident-response"
+```
+
+Use this together with:
+
+- `GET /api/agents/spend-data` for usage/cost totals
+- `GET /api/system/llm-auth-status` for auth health/fallback visibility
+
 ## Agent Settings
 
 Agent settings/prompts can be viewed and modified in the `Settings` tab on the left, in the "Agents Configuration" section. This includes the LLM usage statistics for all LLM usage across Nemesis:

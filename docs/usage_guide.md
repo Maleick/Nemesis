@@ -266,6 +266,36 @@ If results regress, execute rollback/revert commands:
 ./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset balanced
 ```
 
+### AI governance and budget triage
+
+AI governance signals are included in `GET /api/workflows/observability/summary` under `ai_governance`.
+Use this flow when AI spend or policy behavior looks suspicious:
+
+```bash
+# inspect AI governance severity + budget utilization
+curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary
+
+# verify spend counters directly
+curl -k -u n:n https://nemesis:7443/api/agents/spend-data
+
+# verify auth health/fallback state
+curl -k -u n:n https://nemesis:7443/api/system/llm-auth-status
+```
+
+Optional operator override for one synthesis request:
+
+```bash
+curl -k -u n:n -X POST \
+  "https://nemesis:7443/api/reports/source/synthesize?source=<source>&policy_mode=strict_review&policy_override_reason=incident-response"
+```
+
+Recommended AI governance evidence flow:
+
+1. Capture pre-change status snapshot from observability summary.
+2. Record spend totals (`/agents/spend-data`) and auth state (`/system/llm-auth-status`).
+3. Apply override only when needed and document reason.
+4. Capture post-change status snapshot and compare utilization trend.
+
 ### Backend Smoke Gate
 
 Run the backend critical-path smoke gate locally with:

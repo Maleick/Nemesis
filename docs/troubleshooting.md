@@ -90,6 +90,35 @@ If throughput KPIs regress, perform rollback immediately:
 
 Capture queue-drain evidence and the post-rollback status snapshot for incident notes.
 
+## AI Governance Triage and Rollback
+
+When AI governance severity is warning/critical, use this sequence:
+
+```bash
+# 1) Inspect ai_governance severity + utilization
+curl -k -u n:n https://nemesis:7443/api/workflows/observability/summary
+
+# 2) Validate spend totals and request/token counters
+curl -k -u n:n https://nemesis:7443/api/agents/spend-data
+
+# 3) Confirm auth health/fallback state
+curl -k -u n:n https://nemesis:7443/api/system/llm-auth-status
+```
+
+If governance signals regress after an override, rollback to baseline policy mode and capture evidence:
+
+```bash
+# rollback/revert policy override marker and reset to baseline
+./tools/nemesis-ctl.sh throughput-policy prod --policy-clear --preset balanced
+./tools/nemesis-ctl.sh throughput-policy prod --policy-set --preset balanced
+```
+
+Record:
+
+1. Pre-rollback and post-rollback observability status snapshots.
+2. Spend totals before/after rollback.
+3. Any auth health transitions from `/system/llm-auth-status`.
+
 ## Capacity Profile Triage (Multi-Node Runbook)
 
 Use this sequence when a multi-node scale-out run is unstable:

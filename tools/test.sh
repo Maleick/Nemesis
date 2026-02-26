@@ -83,6 +83,16 @@ run_capacity_contract_tests() {
     echo "Capacity profile contract suite passed."
 }
 
+run_ai_governance_contract_tests() {
+    echo "Running AI governance contract suite..."
+    (
+        cd "$BASE_DIR"
+        bash tools/tests/test_ai_governance_contracts.sh
+    )
+    echo ""
+    echo "AI governance contract suite passed."
+}
+
 # Get the absolute path to the project root (one level up from the tools folder)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
@@ -124,10 +134,21 @@ if [ "${1:-}" = "--capacity-contract" ]; then
     shift
     if [ "$#" -gt 0 ]; then
         echo "Unknown option(s): $*"
-        echo "Usage: $0 [--readiness-contract|--smoke-backend|--queue-contract|--capacity-contract]"
+        echo "Usage: $0 [--readiness-contract|--smoke-backend|--queue-contract|--capacity-contract|--ai-governance-contract]"
         exit 1
     fi
     run_capacity_contract_tests
+    exit 0
+fi
+
+if [ "${1:-}" = "--ai-governance-contract" ]; then
+    shift
+    if [ "$#" -gt 0 ]; then
+        echo "Unknown option(s): $*"
+        echo "Usage: $0 [--readiness-contract|--smoke-backend|--queue-contract|--capacity-contract|--ai-governance-contract]"
+        exit 1
+    fi
+    run_ai_governance_contract_tests
     exit 0
 fi
 
