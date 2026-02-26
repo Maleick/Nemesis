@@ -272,6 +272,29 @@ def _env_int(*keys: str, default: int) -> int:
     return default
 
 
+def _env_float(*keys: str, default: float) -> float:
+    for key in keys:
+        raw = os.getenv(key)
+        if raw is None:
+            continue
+        try:
+            return float(raw)
+        except ValueError:
+            logger.warning("Invalid float environment override", key=key, value=raw)
+    return default
+
+
+def _parse_budget_limit(raw_value: str | None, default: float) -> float:
+    if raw_value is None:
+        return default
+    cleaned = raw_value.strip().replace("$", "")
+    try:
+        return float(cleaned)
+    except ValueError:
+        logger.warning("Invalid budget limit override", value=raw_value)
+        return default
+
+
 def _get_observability_thresholds() -> dict[str, int]:
     return {
         "queue_warn": _env_int("OBS_QUEUE_BACKLOG_WARN", "OBS_QUEUE_BACKLOG_WARNING", default=50),
@@ -280,6 +303,19 @@ def _get_observability_thresholds() -> dict[str, int]:
         "workflow_critical": _env_int("OBS_WORKFLOW_FAILURE_CRITICAL", default=20),
         "sustained_seconds": _env_int("OBS_SUSTAINED_DURATION_SECONDS", default=300),
         "cooldown_seconds": _env_int("OBS_ALERT_COOLDOWN_SECONDS", default=900),
+    }
+
+
+def _get_ai_governance_thresholds() -> dict[str, float | str]:
+    budget_limit = _parse_budget_limit(
+        os.getenv("AI_GOV_BUDGET_LIMIT") or os.getenv("MAX_BUDGET"),
+        default=100.0,
+    )
+    return {
+        "budget_limit": budget_limit,
+        "warning_ratio": _env_float("AI_GOV_BUDGET_WARN_RATIO", default=0.75),
+        "critical_ratio": _env_float("AI_GOV_BUDGET_CRITICAL_RATIO", default=1.0),
+        "budget_window": os.getenv("AI_GOV_BUDGET_WINDOW") or os.getenv("BUDGET_DURATION", "30d"),
     }
 
 
@@ -310,6 +346,124 @@ def _severity_rank(severity: str) -> int:
     if severity == "warning":
         return 1
     return 0
+
+
+def _severity_max(left: str, right: str) -> str:
+    return left if _severity_rank(left) >= _severity_rank(right) else right
+
+
+def _risk_confidence_score(risk_level: str | None) -> float | None:
+    level = (risk_level or "").lower()
+    if level == "high":
+        return 0.9
+    if level == "medium":
+        return 0.75
+    if level == "low":
+        return 0.65
+    return None
+
+
+def _confidence_band_for_score(score: float | None) -> str | None:
+    if score is None:
+        return None
+    if score >= 0.85:
+        return "high"
+    if score >= 0.6:
+        return "medium"
+    return "low"
+
+
+def _build_synthesis_policy_context(
+    risk_level: str | None,
+    requested_policy_mode: str | None = None,
+    policy_override_reason: str | None = None,
+    upstream_context: dict | None = None,
+    fail_safe: bool = False,
+    fail_safe_reason: str | None = None,
+) -> dict:
+    context = dict(upstream_context) if isinstance(upstream_context, dict) else {}
+    confidence_score = context.get("confidence_score")
+    if confidence_score is None:
+        confidence_score = _risk_confidence_score(risk_level)
+
+    fallback_mode = requested_policy_mode or ("balanced" if (confidence_score or 0.0) >= 0.7 else "strict_review")
+    policy_mode = context.get("policy_mode") or fallback_mode
+    context["policy_mode"] = policy_mode
+    context["confidence_score"] = confidence_score
+    context["confidence_band"] = context.get("confidence_band") or _confidence_band_for_score(confidence_score)
+
+    override = context.get("override")
+    if not isinstance(override, dict):
+        override = {}
+    override["requested"] = bool(requested_policy_mode or override.get("requested"))
+    override["requested_mode"] = requested_policy_mode or override.get("requested_mode")
+    override["applied_mode"] = policy_mode
+    if policy_override_reason:
+        override["reason"] = policy_override_reason
+    else:
+        override.setdefault("reason", None)
+    override["source"] = override.get("source") or ("operator" if requested_policy_mode else "system")
+    context["override"] = override
+
+    context["fail_safe"] = bool(context.get("fail_safe", fail_safe))
+    context["fail_safe_reason"] = context.get("fail_safe_reason") or fail_safe_reason
+    return context
+
+
+def _build_ai_governance_signal(spend_data: dict | None, auth_status: dict | None) -> dict:
+    thresholds = _get_ai_governance_thresholds()
+    budget_limit = float(thresholds["budget_limit"])
+    warning_ratio = float(thresholds["warning_ratio"])
+    critical_ratio = float(thresholds["critical_ratio"])
+    budget_window = str(thresholds["budget_window"])
+
+    spend_payload = spend_data if isinstance(spend_data, dict) else {}
+    auth_payload = auth_status if isinstance(auth_status, dict) else {}
+
+    total_spend = float(spend_payload.get("total_spend", 0.0) or 0.0)
+    total_tokens = int(spend_payload.get("total_tokens", 0) or 0)
+    total_requests = int(spend_payload.get("total_requests", 0) or 0)
+
+    utilization_ratio = 0.0
+    if budget_limit > 0:
+        utilization_ratio = total_spend / budget_limit
+
+    if utilization_ratio >= critical_ratio:
+        severity = "critical"
+    elif utilization_ratio >= warning_ratio:
+        severity = "warning"
+    else:
+        severity = "normal"
+
+    fail_safe = False
+    fail_safe_reasons = []
+    spend_error = spend_payload.get("error")
+    if spend_error:
+        fail_safe = True
+        fail_safe_reasons.append("Spend telemetry unavailable")
+        severity = _severity_max(severity, "warning")
+
+    auth_healthy = auth_payload.get("healthy")
+    if auth_healthy is False:
+        fail_safe = True
+        fail_safe_reasons.append("LLM auth unhealthy")
+        severity = _severity_max(severity, "warning")
+
+    return {
+        "severity": severity,
+        "total_spend": total_spend,
+        "total_tokens": total_tokens,
+        "total_requests": total_requests,
+        "budget_limit": budget_limit,
+        "budget_window": budget_window,
+        "utilization_ratio": round(utilization_ratio, 4),
+        "warning_threshold_ratio": warning_ratio,
+        "critical_threshold_ratio": critical_ratio,
+        "fail_safe": fail_safe,
+        "fail_safe_reason": "; ".join(fail_safe_reasons) if fail_safe_reasons else None,
+        "auth_mode": auth_payload.get("mode"),
+        "auth_healthy": auth_healthy if isinstance(auth_healthy, bool) else None,
+    }
 
 
 def _build_throughput_policy_status_payload(
@@ -1154,8 +1308,23 @@ async def _load_observability_inputs() -> tuple[dict, dict, dict, dict]:
     return queue_metrics, workflow_status, failed_workflows, health_payload
 
 
+async def _load_ai_governance_inputs() -> tuple[dict, dict]:
+    spend_data = await get_agents_spend_data()
+    llm_auth_status = await get_llm_auth_status()
+    if not isinstance(spend_data, dict):
+        spend_data = {"error": "Invalid spend payload"}
+    if not isinstance(llm_auth_status, dict):
+        llm_auth_status = {"healthy": False, "mode": "unknown", "message": "Invalid auth payload"}
+    return spend_data, llm_auth_status
+
+
 def _build_observability_summary_payload(
-    queue_metrics: dict, workflow_status: dict, failed_workflows: dict, health_payload: dict
+    queue_metrics: dict,
+    workflow_status: dict,
+    failed_workflows: dict,
+    health_payload: dict,
+    ai_governance_data: dict | None = None,
+    llm_auth_status: dict | None = None,
 ) -> dict:
     thresholds = _get_observability_thresholds()
 
@@ -1194,6 +1363,11 @@ def _build_observability_summary_payload(
         elif dep_readiness == "degraded":
             degraded_dependencies.append(dependency.get("name", "unknown"))
 
+    ai_governance_signal = _build_ai_governance_signal(
+        spend_data=ai_governance_data,
+        auth_status=llm_auth_status,
+    )
+
     return {
         "queue_backlog": {
             "severity": queue_severity,
@@ -1217,6 +1391,7 @@ def _build_observability_summary_payload(
             "unhealthy_dependencies": unhealthy_dependencies,
             "degraded_dependencies": degraded_dependencies,
         },
+        "ai_governance": ai_governance_signal,
         "timestamp": _utcnow().isoformat(),
     }
 
@@ -1389,11 +1564,14 @@ async def get_workflow_lifecycle(
 async def get_observability_summary():
     try:
         queue_metrics, workflow_status, failed_workflows, health_payload = await _load_observability_inputs()
+        ai_governance_data, llm_auth_status = await _load_ai_governance_inputs()
         return _build_observability_summary_payload(
             queue_metrics=queue_metrics,
             workflow_status=workflow_status,
             failed_workflows=failed_workflows,
             health_payload=health_payload,
+            ai_governance_data=ai_governance_data,
+            llm_auth_status=llm_auth_status,
         )
     except Exception as e:
         logger.exception(message="Error getting observability summary")
@@ -1413,11 +1591,14 @@ async def evaluate_observability_alerts(
 ):
     try:
         queue_metrics, workflow_status, failed_workflows, health_payload = await _load_observability_inputs()
+        ai_governance_data, llm_auth_status = await _load_ai_governance_inputs()
         summary_payload = _build_observability_summary_payload(
             queue_metrics=queue_metrics,
             workflow_status=workflow_status,
             failed_workflows=failed_workflows,
             health_payload=health_payload,
+            ai_governance_data=ai_governance_data,
+            llm_auth_status=llm_auth_status,
         )
         return await _evaluate_observability_alerts(summary_payload=summary_payload, emit_alerts=emit_alerts)
     except Exception as e:
@@ -2589,6 +2770,8 @@ async def synthesize_source_report(
     source: str = Query(..., description="Source name (supports URLs and special characters, case-insensitive)"),
     include_findings_details: bool = Query(True, description="Include detailed findings in the analysis"),
     max_tokens: int = Query(150000, description="Maximum tokens for LLM analysis"),
+    policy_mode: str | None = Query(None, description="Optional operator policy mode override"),
+    policy_override_reason: str | None = Query(None, description="Optional rationale for policy override"),
 ):
     """
     Generate LLM-based risk assessment for a source.
@@ -2613,6 +2796,12 @@ async def synthesize_source_report(
             "source_name": source,
             "max_tokens": max_tokens,
         }
+        if policy_mode or policy_override_reason:
+            request_data["policy_override"] = {
+                "requested_mode": policy_mode,
+                "reason": policy_override_reason,
+                "source": "operator",
+            }
 
         response = requests.post(url, json=request_data, timeout=120)
 
@@ -2630,6 +2819,14 @@ async def synthesize_source_report(
                 error=error_msg,
                 report_markdown=None,
                 risk_level=None,
+                policy_context=_build_synthesis_policy_context(
+                    risk_level=None,
+                    requested_policy_mode=policy_mode,
+                    policy_override_reason=policy_override_reason,
+                    upstream_context=result.get("policy_context"),
+                    fail_safe=True,
+                    fail_safe_reason=error_msg,
+                ),
             )
 
         # Build full markdown report
@@ -2645,6 +2842,12 @@ async def synthesize_source_report(
             key_findings=result.get("critical_findings", []),
             recommendations=[],  # Not providing recommendations as per requirements
             token_usage=result.get("token_usage"),
+            policy_context=_build_synthesis_policy_context(
+                risk_level=result.get("risk_level"),
+                requested_policy_mode=policy_mode,
+                policy_override_reason=policy_override_reason,
+                upstream_context=result.get("policy_context"),
+            ),
         )
 
     except HTTPException:
@@ -2666,6 +2869,8 @@ async def synthesize_system_report(
     start_date: datetime | None = Query(None, description="Filter by start date"),
     end_date: datetime | None = Query(None, description="Filter by end date"),
     project: str | None = Query(None, description="Filter by project name"),
+    policy_mode: str | None = Query(None, description="Optional operator policy mode override"),
+    policy_override_reason: str | None = Query(None, description="Optional rationale for policy override"),
 ):
     """
     Generate LLM-based system-wide risk assessment.
@@ -2690,6 +2895,12 @@ async def synthesize_system_report(
             "source_name": "System-Wide",
             "max_tokens": max_tokens,
         }
+        if policy_mode or policy_override_reason:
+            request_data["policy_override"] = {
+                "requested_mode": policy_mode,
+                "reason": policy_override_reason,
+                "source": "operator",
+            }
 
         response = requests.post(url, json=request_data, timeout=120)
 
@@ -2707,6 +2918,14 @@ async def synthesize_system_report(
                 error=error_msg,
                 report_markdown=None,
                 risk_level=None,
+                policy_context=_build_synthesis_policy_context(
+                    risk_level=None,
+                    requested_policy_mode=policy_mode,
+                    policy_override_reason=policy_override_reason,
+                    upstream_context=result.get("policy_context"),
+                    fail_safe=True,
+                    fail_safe_reason=error_msg,
+                ),
             )
 
         # Build full markdown report
@@ -2722,6 +2941,12 @@ async def synthesize_system_report(
             key_findings=result.get("critical_findings", []),
             recommendations=[],  # Not providing recommendations as per requirements
             token_usage=result.get("token_usage"),
+            policy_context=_build_synthesis_policy_context(
+                risk_level=result.get("risk_level"),
+                requested_policy_mode=policy_mode,
+                policy_override_reason=policy_override_reason,
+                upstream_context=result.get("policy_context"),
+            ),
         )
 
     except HTTPException:

@@ -95,6 +95,9 @@ class ValidateResponse(BaseModel):
     true_positive_context: str | None = Field(
         None, description="Context/risk for true_positive decisions. Only required for true_positive findings."
     )
+    policy_context: dict[str, Any] | None = Field(
+        None, description="Optional confidence-aware policy context and override metadata."
+    )
 
 
 class CredentialWithContext(BaseModel):
@@ -138,6 +141,9 @@ class TriageResult(BaseModel):
     explanation: str = Field(..., description="Explanation for the triage decision")
     confidence: float | None = Field(None, ge=0.0, le=1.0, description="Confidence score 0-1.0 (optional)")
     true_positive_context: str | None = Field(None, description="Context/risk for true_positive decisions")
+    policy_context: dict[str, Any] | None = Field(
+        None, description="Optional confidence-aware policy context and override metadata."
+    )
     success: bool = Field(..., description="Whether the triage process completed successfully")
 
 
@@ -155,3 +161,7 @@ class ReportSynthesisResponse(BaseModel):
     sensitive_data_exposure: str = Field(..., description="Analysis of sensitive data exposure")
     attack_surface: str = Field(..., description="Analysis of attack surface based on file types and applications")
     full_report_markdown: str = Field(..., description="Full markdown-formatted report combining all sections")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0, description="Optional confidence score 0-1.0")
+    policy_context: dict[str, Any] | None = Field(
+        default=None, description="Optional confidence-aware policy context and override metadata."
+    )

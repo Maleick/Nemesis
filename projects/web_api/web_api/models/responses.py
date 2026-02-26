@@ -205,6 +205,23 @@ class SystemReport(BaseModel):
     enrichment_stats: dict
 
 
+class AIPolicyOverride(BaseModel):
+    requested: bool = False
+    requested_mode: str | None = None
+    applied_mode: str | None = None
+    reason: str | None = None
+    source: str | None = None
+
+
+class AIPolicyContext(BaseModel):
+    policy_mode: str
+    confidence_score: float | None = None
+    confidence_band: str | None = None
+    override: AIPolicyOverride = Field(default_factory=AIPolicyOverride)
+    fail_safe: bool = False
+    fail_safe_reason: str | None = None
+
+
 class LLMSynthesisResponse(BaseModel):
     success: bool
     report_markdown: str | None = None
@@ -212,6 +229,7 @@ class LLMSynthesisResponse(BaseModel):
     key_findings: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
     token_usage: int | None = None
+    policy_context: AIPolicyContext | None = None
     error: str | None = None
 
 
@@ -288,10 +306,27 @@ class ServiceHealthSignal(BaseModel):
     degraded_dependencies: list[str] = Field(default_factory=list)
 
 
+class AIGovernanceSignal(BaseModel):
+    severity: str
+    total_spend: float
+    total_tokens: int
+    total_requests: int
+    budget_limit: float
+    budget_window: str
+    utilization_ratio: float
+    warning_threshold_ratio: float
+    critical_threshold_ratio: float
+    fail_safe: bool
+    fail_safe_reason: str | None = None
+    auth_mode: str | None = None
+    auth_healthy: bool | None = None
+
+
 class ObservabilitySummaryResponse(BaseModel):
     queue_backlog: QueueBacklogSignal
     workflow_failures: WorkflowFailureSignal
     service_health: ServiceHealthSignal
+    ai_governance: AIGovernanceSignal | None = None
     timestamp: str
 
 
