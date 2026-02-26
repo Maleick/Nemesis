@@ -90,6 +90,22 @@ If throughput KPIs regress, perform rollback immediately:
 
 Capture queue-drain evidence and the post-rollback status snapshot for incident notes.
 
+## Capacity Profile Triage (Multi-Node Runbook)
+
+Use this sequence when a multi-node scale-out run is unstable:
+
+1. Validate readiness with the active profile flags:
+   - `./tools/nemesis-ctl.sh status <dev|prod> [--monitoring] [--jupyter] [--llm]`
+2. Run capacity contract checks:
+   - `./tools/test.sh --capacity-contract`
+3. Review queue-drain behavior from observability summary endpoints.
+4. If degradation persists, rollback/revert to baseline topology:
+   - stop profile with current flags
+   - disable file-enrichment replica stanzas
+   - restart baseline profile and validate readiness again
+
+This keeps capacity profile, queue-drain, and rollback evidence aligned for incident timelines.
+
 ## Analyze Message Queues
 
 Nemesis uses message queue in its enrichment workflows. To quickly get an overview of the state of the queues, view the "Enrichment Queues" section in Nemesis's dashboard:

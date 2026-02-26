@@ -98,6 +98,25 @@ Revert path:
 
 Record the revert command output and post-revert status snapshot with the benchmark comparison results.
 
+## Capacity Profile Validation (Single-Node to Multi-Node)
+
+Before enabling multi-node scale-out, validate the selected capacity profile contract:
+
+```bash
+./tools/nemesis-ctl.sh capacity-profile prod --capacity-mode scale-out --capacity-validate
+./tools/test.sh --capacity-contract
+```
+
+For every capacity profile change, collect this evidence bundle:
+
+1. Validate readiness:
+   - `./tools/nemesis-ctl.sh status <dev|prod> [--monitoring] [--jupyter] [--llm]`
+2. Collect queue-drain metrics from observability endpoints.
+3. Compare benchmark output against a saved baseline.
+4. Capture rollback/revert command output when reverting from scale-out.
+
+Treat capacity profile changes as complete only when readiness is stable and queue-drain behavior is not regressing under the same workload window.
+
 ### file_enrichment
 Every uploaded file is first placed on the `files-new_file` queue. The file_enrichment service consumes files from the queue and processes each one with the [applicable enrichment modules](https://github.com/SpecterOps/Nemesis/tree/main/libs/file_enrichment_modules). To improve file_enrichment performance, analyze its CPU usage with `docker compose stats file-enrichment` or in the "Docker Monitoring" dashboard in Grafana. 
 

@@ -85,6 +85,17 @@ docker compose logs <service> --tail 80
 
 Only proceed to dashboard workflows after core services report `healthy` (or expected `degraded` for optional profiles).
 
+### Step 3.2: Capacity Profile Path (Optional Multi-Node Scale-Out)
+
+If you need multi-node throughput capacity beyond baseline startup, validate a capacity profile before making compose changes:
+
+```bash
+./tools/nemesis-ctl.sh capacity-profile prod --capacity-mode scale-out --capacity-validate
+./tools/test.sh --capacity-contract
+```
+
+Then follow the executable scale-out runbook in [docker_compose.md](./docker_compose.md#multi-node-scale-out-runbook-executable), including readiness validation and rollback/revert guidance.
+
 ### Step 4: Access the Web Dashboard
 
 In a web browser, open `https://localhost:7443/` (or the URL Nemesis is hosted on) to access the main Nemesis web interface. Use `n:n` for basic auth unless you specified users. Upon logging in, you will enter your username and project (this is saved in your browser cache and only needed once):
