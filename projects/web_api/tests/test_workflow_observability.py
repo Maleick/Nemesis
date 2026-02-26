@@ -117,6 +117,21 @@ def test_observability_summary_reports_signal_severities(client, monkeypatch):
 
     monkeypatch.setattr("web_api.main._load_observability_inputs", _mock_inputs)
 
+    async def _mock_ai_inputs():
+        return (
+            {
+                "total_spend": 85.0,
+                "total_tokens": 18000,
+                "total_requests": 42,
+            },
+            {
+                "mode": "official_key",
+                "healthy": True,
+            },
+        )
+
+    monkeypatch.setattr("web_api.main._load_ai_governance_inputs", _mock_ai_inputs)
+
     response = client.get("/workflows/observability/summary")
     assert response.status_code == 200
     payload = response.json()
@@ -124,6 +139,7 @@ def test_observability_summary_reports_signal_severities(client, monkeypatch):
     assert payload["workflow_failures"]["severity"] == "critical"
     assert payload["service_health"]["severity"] == "critical"
     assert payload["service_health"]["unhealthy_dependencies"] == ["postgres"]
+    assert payload["ai_governance"]["severity"] == "warning"
 
 
 def test_observability_alert_emits_after_sustained_duration(client, monkeypatch):
