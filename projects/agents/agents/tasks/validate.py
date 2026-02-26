@@ -4,6 +4,7 @@ import structlog
 from agents.base_agent import BaseAgent
 from agents.logger import set_agent_metadata
 from agents.model_manager import ModelManager
+from agents.policy_context import build_policy_context
 from agents.prompt_manager import PromptManager
 from agents.schemas import TriageCategory, ValidateResponse
 from common.db import get_postgres_connection_str
@@ -73,6 +74,7 @@ with this information (i.e., the risk). If it's not a true_positive omit this co
         object_id = activity_input.get("object_id", "")
         finding_id = activity_input.get("finding_id", "")
         summary = activity_input.get("summary", "")
+        policy_override = activity_input.get("policy_override")
 
         logger.debug("validate_finding activity started", file_path=file_path)
 
@@ -84,6 +86,11 @@ with this information (i.e., the risk). If it's not a true_positive omit this co
                 "decision": TriageCategory.NOT_TRIAGED,
                 "explanation": "AI model not available for validation",
                 "confidence": 0.0,
+                "policy_context": {
+                    **build_policy_context(0.0, policy_override=policy_override),
+                    "fail_safe": True,
+                    "fail_safe_reason": "AI model unavailable; strict review fallback applied.",
+                },
             }
 
         try:
@@ -128,6 +135,11 @@ with this information (i.e., the risk). If it's not a true_positive omit this co
                 "decision": result.output.decision,
                 "explanation": result.output.explanation,
                 "confidence": result.output.confidence,
+                "policy_context": {
+                    **build_policy_context(result.output.confidence, policy_override=policy_override),
+                    "fail_safe": False,
+                    "fail_safe_reason": None,
+                },
             }
 
             # Only include true_positive_context if it exists
@@ -142,6 +154,11 @@ with this information (i.e., the risk). If it's not a true_positive omit this co
                 "decision": TriageCategory.NOT_TRIAGED,
                 "explanation": f"Validation error: {str(e)}",
                 "confidence": 0.0,
+                "policy_context": {
+                    **build_policy_context(0.0, policy_override=policy_override),
+                    "fail_safe": True,
+                    "fail_safe_reason": "Validation error fallback applied.",
+                },
             }
 
 

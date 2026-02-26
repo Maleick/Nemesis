@@ -6,6 +6,7 @@ import structlog
 from agents.base_agent import BaseAgent
 from agents.logger import set_agent_metadata
 from agents.model_manager import ModelManager
+from agents.policy_context import build_reporting_policy_context
 from agents.prompt_manager import PromptManager
 from agents.schemas import ReportSynthesisResponse
 from common.db import get_postgres_connection_str
@@ -109,6 +110,7 @@ Be concise, factual, and focus on risk impact rather than detection methods."""
         report_data = activity_input.get("report_data", {})
         report_type = activity_input.get("report_type", "source")
         source_name = activity_input.get("source_name", "Unknown")
+        policy_override = activity_input.get("policy_override")
 
         logger.debug("reporting_agent started", report_type=report_type, source_name=source_name)
 
@@ -116,7 +118,15 @@ Be concise, factual, and focus on risk impact rather than detection methods."""
 
         if not model:
             logger.warning("No model available from ModelManager")
-            return {"success": False, "error": "AI model not available for report synthesis"}
+            return {
+                "success": False,
+                "error": "AI model not available for report synthesis",
+                "policy_context": {
+                    **build_reporting_policy_context(None, policy_override=policy_override),
+                    "fail_safe": True,
+                    "fail_safe_reason": "AI model unavailable for synthesis.",
+                },
+            }
 
         try:
             # Set metadata for this agent run
@@ -181,11 +191,24 @@ Be concise, factual, and focus on risk impact rather than detection methods."""
                 "attack_surface": synthesis.attack_surface,
                 "full_report_markdown": synthesis.full_report_markdown,
                 "token_usage": result.usage().total_tokens,
+                "policy_context": {
+                    **build_reporting_policy_context(synthesis.risk_level, policy_override=policy_override),
+                    "fail_safe": False,
+                    "fail_safe_reason": None,
+                },
             }
 
         except Exception as e:
             logger.error("Report synthesis failed", report_type=report_type, source_name=source_name, error=str(e))
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "error": str(e),
+                "policy_context": {
+                    **build_reporting_policy_context(None, policy_override=policy_override),
+                    "fail_safe": True,
+                    "fail_safe_reason": "Synthesis execution error fallback applied.",
+                },
+            }
 
     def _build_source_prompt(self, source_name: str, report_data: dict) -> str:
         """Build analysis prompt for a source-specific report."""

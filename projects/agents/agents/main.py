@@ -718,6 +718,7 @@ def run_report_generator(request: dict):
         report_type = request.get("report_type", "source")
         source_name = request.get("source_name", "Unknown")
         max_tokens = request.get("max_tokens", 150000)
+        policy_override = request.get("policy_override")
 
         # Create a mock workflow context for compatibility
         mock_ctx = type("MockContext", (), {})()
@@ -731,6 +732,7 @@ def run_report_generator(request: dict):
                 "report_type": report_type,
                 "source_name": source_name,
                 "max_tokens": max_tokens,
+                "policy_override": policy_override,
             },
         )
         return result
