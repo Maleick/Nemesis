@@ -749,6 +749,7 @@ const StatsOverview = () => {
     queue: '/help#queue-triage',
     failures: '/help#failure-triage',
     services: '/help#service-triage',
+    aiGovernance: '/help#ai-governance-triage',
   };
 
   return (
@@ -919,9 +920,9 @@ const StatsOverview = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Enrichment Overview Section */}
         <DashboardSection title="Enrichment Overview">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
             {isObservabilityLoading ? (
-              <div className="md:col-span-3 flex justify-center py-3">
+              <div className="md:col-span-4 flex justify-center py-3">
                 <div className="animate-spin h-6 w-6 border-2 border-blue-500 rounded-full border-t-transparent" />
               </div>
             ) : (
@@ -968,6 +969,24 @@ const StatsOverview = () => {
                   </div>
                   <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation(observabilityTriageLinks.services)}>
                     Service triage links
+                  </button>
+                </div>
+
+                <div className="p-3 bg-white dark:bg-gray-700 rounded shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">AI Governance</span>
+                    <span className={`px-2 py-0.5 rounded text-xs font-semibold ${getSeverityBadgeClass(observabilitySummary?.ai_governance?.severity)}`}>
+                      {formatSeverity(observabilitySummary?.ai_governance?.severity)}
+                    </span>
+                  </div>
+                  <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+                    ${Number(observabilitySummary?.ai_governance?.total_spend ?? 0).toFixed(2)} / ${Number(observabilitySummary?.ai_governance?.budget_limit ?? 0).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {(Number(observabilitySummary?.ai_governance?.utilization_ratio ?? 0) * 100).toFixed(1)}% budget used
+                  </div>
+                  <button className="mt-2 text-xs text-blue-500 hover:text-blue-700" onClick={() => handleNavigation(observabilityTriageLinks.aiGovernance)}>
+                    AI governance triage
                   </button>
                 </div>
               </>

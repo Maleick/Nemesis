@@ -288,6 +288,15 @@ const HelpPage = () => {
                 <li>Follow the troubleshooting runbook and re-run status until dependencies stabilize.</li>
               </ol>
             </section>
+
+            <section id="ai-governance-triage" className="rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+              <h3 className="font-semibold text-gray-900 dark:text-white">AI governance triage</h3>
+              <ol className="list-decimal pl-5 mt-2 text-sm text-gray-600 dark:text-gray-300 space-y-1">
+                <li>Check <code>/api/workflows/observability/summary</code> and review the <code>ai_governance</code> severity block.</li>
+                <li>Validate spend totals via <code>/api/agents/spend-data</code> and confirm auth health via <code>/api/system/llm-auth-status</code>.</li>
+                <li>If severity is warning/critical, follow the usage/troubleshooting rollback guidance and capture before/after status snapshots.</li>
+              </ol>
+            </section>
           </CardContent>
         </Card>
       </div>
