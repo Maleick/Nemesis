@@ -17,6 +17,8 @@ Actions:
   status          Show profile-aware readiness status for core services.
   stop            Stop and remove services (containers and networks).
   clean           Stop and remove services AND delete associated data volumes.
+  throughput-policy
+                  Manage queue-pressure throughput policy presets and TTL overrides via API.
 
 Environments:
   dev             Development environment.
@@ -27,6 +29,17 @@ Options:
   --monitoring    Enable the monitoring profile (Grafana, Prometheus).
   --jupyter       Enable the Jupyter profile.
   --llm           Enable the LLM services profile.
+  --policy-status Show active throughput policy status (default throughput-policy mode).
+  --policy-set    Apply named throughput policy preset immediately.
+  --policy-override
+                  Apply named throughput policy preset with time-bounded TTL override.
+  --policy-clear  Clear local TTL override marker for throughput policy operations.
+  --preset <name> Throughput policy preset: conservative | balanced | aggressive.
+  --ttl <minutes> TTL in minutes for --policy-override (default: 30).
+  --api-base <url>
+                  API base URL for throughput policy endpoints (default: https://nemesis:7443/api).
+  --telemetry-stale
+                  Force fail-safe conservative policy mode when evaluating status.
 
 Examples:
   # Start production services with monitoring
@@ -43,6 +56,12 @@ Examples:
 
   # Build and start all development services
   $0 start dev --build
+
+  # Show throughput policy status
+  $0 throughput-policy prod --policy-status --preset balanced
+
+  # Apply aggressive policy override for 20 minutes
+  $0 throughput-policy prod --policy-override --preset aggressive --ttl 20
 EOF
   exit 1
 }
@@ -65,8 +84,8 @@ ENVIRONMENT=$1
 shift
 
 # Validate action
-if [[ "$ACTION" != "start" && "$ACTION" != "status" && "$ACTION" != "stop" && "$ACTION" != "clean" ]]; then
-  echo "Error: Invalid action '$ACTION'. Must be 'start', 'status', 'stop', or 'clean'." >&2
+if [[ "$ACTION" != "start" && "$ACTION" != "status" && "$ACTION" != "stop" && "$ACTION" != "clean" && "$ACTION" != "throughput-policy" ]]; then
+  echo "Error: Invalid action '$ACTION'. Must be 'start', 'status', 'stop', 'clean', or 'throughput-policy'." >&2
   echo "" >&2
   usage
 fi
@@ -82,6 +101,11 @@ BUILD=false
 MONITORING=false
 JUPYTER=false
 LLM=false
+THROUGHPUT_MODE=""
+THROUGHPUT_PRESET="${THROUGHPUT_POLICY_PRESET:-balanced}"
+THROUGHPUT_TTL_MINUTES=30
+THROUGHPUT_API_BASE="${NEMESIS_API_BASE_URL:-https://nemesis:7443/api}"
+THROUGHPUT_TELEMETRY_STALE=false
 
 # Parse optional flags
 while [[ "$#" -gt 0 ]]; do
@@ -90,6 +114,35 @@ while [[ "$#" -gt 0 ]]; do
     --monitoring) MONITORING=true; shift ;;
     --jupyter) JUPYTER=true; shift ;;
     --llm) LLM=true; shift ;;
+    --policy-status) THROUGHPUT_MODE="status"; shift ;;
+    --policy-set) THROUGHPUT_MODE="set"; shift ;;
+    --policy-override) THROUGHPUT_MODE="override"; shift ;;
+    --policy-clear) THROUGHPUT_MODE="clear"; shift ;;
+    --preset)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --preset requires a value." >&2
+        exit 1
+      fi
+      THROUGHPUT_PRESET="$2"
+      shift 2
+      ;;
+    --ttl)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --ttl requires a value." >&2
+        exit 1
+      fi
+      THROUGHPUT_TTL_MINUTES="$2"
+      shift 2
+      ;;
+    --api-base)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --api-base requires a value." >&2
+        exit 1
+      fi
+      THROUGHPUT_API_BASE="$2"
+      shift 2
+      ;;
+    --telemetry-stale) THROUGHPUT_TELEMETRY_STALE=true; shift ;;
     *) echo "Unknown option: $1" >&2; echo "" >&2; usage ;;
   esac
 done
@@ -98,6 +151,21 @@ done
 if ( [ "$ACTION" = "stop" ] || [ "$ACTION" = "clean" ] ) && [ "$BUILD" = "true" ]; then
   echo "Error: The --build flag cannot be used with the 'stop' or 'clean' actions." >&2
   exit 1
+fi
+
+if [ "$ACTION" = "throughput-policy" ]; then
+  case "$THROUGHPUT_PRESET" in
+    conservative|balanced|aggressive) ;;
+    *)
+      echo "Error: --preset must be one of: conservative, balanced, aggressive." >&2
+      exit 1
+      ;;
+  esac
+
+  if ! [[ "$THROUGHPUT_TTL_MINUTES" =~ ^[0-9]+$ ]] || [ "$THROUGHPUT_TTL_MINUTES" -le 0 ]; then
+    echo "Error: --ttl must be a positive integer number of minutes." >&2
+    exit 1
+  fi
 fi
 
 # --- Main Logic ---
@@ -161,6 +229,127 @@ compose_cmd() {
   else
     "${CMD_PREFIX[@]}" "${DOCKER_CMD[@]}" "$@"
   fi
+}
+
+throughput_override_file() {
+  echo "/tmp/nemesis-throughput-policy-${ENVIRONMENT}.override"
+}
+
+build_throughput_query() {
+  local query="preset=${THROUGHPUT_PRESET}"
+  if [ "$THROUGHPUT_TELEMETRY_STALE" = "true" ]; then
+    query="${query}&telemetry_stale=true"
+  fi
+  echo "$query"
+}
+
+render_throughput_status() {
+  local payload="$1"
+  python3 - "$payload" <<'PY'
+import json
+import sys
+
+payload = json.loads(sys.argv[1])
+
+print("--- Throughput Policy Status ---")
+print(f"Requested preset: {payload.get('requested_preset', 'unknown')}")
+print(f"Active preset:    {payload.get('active_preset', 'unknown')}")
+print(f"Policy active:    {payload.get('policy_active', False)}")
+print(f"Queue pressure:   {payload.get('queue_pressure_level', 'unknown')}")
+print(f"Fail-safe mode:   {payload.get('fail_safe', False)}")
+if payload.get("fail_safe_reason"):
+    print(f"Fail-safe reason: {payload.get('fail_safe_reason')}")
+print(
+    f"Sustained/Cooldown: {payload.get('sustained_seconds', 0)}/"
+    f"{payload.get('sustained_seconds_required', 0)} sec, cooldown remaining "
+    f"{payload.get('cooldown_remaining_seconds', 0)} sec"
+)
+print("")
+print("Per-class policy state:")
+for class_state in payload.get("class_states", []):
+    class_name = class_state.get("class_name", "unknown")
+    parallelism = class_state.get("active_parallelism", 0)
+    floor = class_state.get("minimum_floor", 0)
+    deferred = class_state.get("deferred_admission", False)
+    reason = class_state.get("reason", "")
+    print(f"  - {class_name}: parallelism={parallelism}, floor={floor}, deferred={deferred}")
+    if reason:
+        print(f"    reason: {reason}")
+print("")
+print("Per-queue policy thresholds:")
+for queue_state in payload.get("queue_states", []):
+    queue = queue_state.get("queue", "unknown")
+    queued = queue_state.get("queued_messages", 0)
+    warning = queue_state.get("warning_threshold", 0)
+    critical = queue_state.get("critical_threshold", 0)
+    severity = queue_state.get("severity", "unknown")
+    print(f"  - {queue}: queued={queued}, warning={warning}, critical={critical}, severity={severity}")
+PY
+}
+
+run_throughput_policy() {
+  local mode="$THROUGHPUT_MODE"
+  if [ -z "$mode" ]; then
+    mode="status"
+  fi
+
+  local override_file
+  override_file="$(throughput_override_file)"
+
+  if [ "$mode" = "status" ] && [ -f "$override_file" ]; then
+    local override_preset
+    local override_expiry
+    IFS=',' read -r override_preset override_expiry < "$override_file" || true
+    local now_epoch
+    now_epoch="$(date +%s)"
+    if [ -n "${override_preset:-}" ] && [ -n "${override_expiry:-}" ] && [ "$now_epoch" -lt "$override_expiry" ]; then
+      THROUGHPUT_PRESET="$override_preset"
+      echo "Active throughput-policy override detected: preset=$override_preset (expires epoch=$override_expiry)"
+    else
+      rm -f "$override_file"
+    fi
+  fi
+
+  local query
+  query="$(build_throughput_query)"
+  local endpoint="workflows/throughput-policy/status"
+  local method="GET"
+
+  case "$mode" in
+    status)
+      ;;
+    set)
+      endpoint="workflows/throughput-policy/evaluate"
+      method="POST"
+      rm -f "$override_file"
+      ;;
+    override)
+      endpoint="workflows/throughput-policy/evaluate"
+      method="POST"
+      local now_epoch
+      now_epoch="$(date +%s)"
+      local expires_epoch=$((now_epoch + THROUGHPUT_TTL_MINUTES * 60))
+      printf "%s,%s\n" "$THROUGHPUT_PRESET" "$expires_epoch" > "$override_file"
+      echo "Applied throughput-policy override preset=$THROUGHPUT_PRESET ttl=${THROUGHPUT_TTL_MINUTES}m (expires epoch=$expires_epoch)"
+      ;;
+    clear)
+      rm -f "$override_file"
+      echo "Cleared local throughput-policy TTL override marker."
+      ;;
+    *)
+      echo "Error: Unknown throughput policy mode '$mode'." >&2
+      exit 1
+      ;;
+  esac
+
+  local response
+  if [ "$method" = "GET" ]; then
+    response="$(curl -fsS -k -u n:n "${THROUGHPUT_API_BASE}/${endpoint}?${query}")"
+  else
+    response="$(curl -fsS -k -u n:n -X POST "${THROUGHPUT_API_BASE}/${endpoint}?${query}")"
+  fi
+
+  render_throughput_status "$response"
 }
 
 run_readiness_matrix() {
@@ -241,7 +430,10 @@ run_readiness_matrix() {
 }
 
 # 3. Handle Action
-if [ "$ACTION" = "status" ]; then
+if [ "$ACTION" = "throughput-policy" ]; then
+  run_throughput_policy
+  exit $?
+elif [ "$ACTION" = "status" ]; then
   run_readiness_matrix
   exit $?
 elif [ "$ACTION" = "start" ]; then
