@@ -319,3 +319,36 @@ class ObservabilityAlertEvaluationResponse(BaseModel):
     alerts_emitted: list[OperationalAlertEvent] = Field(default_factory=list)
     condition_states: list[ObservabilityConditionState] = Field(default_factory=list)
     summary: ObservabilitySummaryResponse
+
+
+class ThroughputPolicyQueueState(BaseModel):
+    queue: str
+    queued_messages: int
+    warning_threshold: int
+    critical_threshold: int
+    severity: str
+
+
+class ThroughputPolicyClassState(BaseModel):
+    class_name: str
+    active_parallelism: int
+    minimum_floor: int
+    deferred_admission: bool
+    reason: str
+
+
+class ThroughputPolicyStatusResponse(BaseModel):
+    requested_preset: str
+    active_preset: str
+    queue_pressure_level: str
+    policy_active: bool
+    telemetry_stale: bool
+    fail_safe: bool
+    fail_safe_reason: str | None = None
+    sustained_seconds: int
+    sustained_seconds_required: int
+    cooldown_seconds: int
+    cooldown_remaining_seconds: int
+    queue_states: list[ThroughputPolicyQueueState] = Field(default_factory=list)
+    class_states: list[ThroughputPolicyClassState] = Field(default_factory=list)
+    timestamp: str

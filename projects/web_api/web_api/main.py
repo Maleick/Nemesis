@@ -37,9 +37,11 @@ from common.models2.health import ServiceReadinessResponse
 from common.queues import (
     ALERTING_NEW_ALERT_TOPIC,
     ALERTING_PUBSUB,
+    DOCUMENT_CONVERSION_INPUT_TOPIC,
     FILES_BULK_ENRICHMENT_TASK_TOPIC,
     FILES_NEW_FILE_TOPIC,
     FILES_PUBSUB,
+    NOSEYPARKER_INPUT_TOPIC,
     WORKFLOW_MONITOR_COMPLETED_TOPIC,
     WORKFLOW_MONITOR_PUBSUB,
 )
@@ -70,6 +72,7 @@ from web_api.models.responses import (
     SourceReport,
     SourceSummary,
     SystemReport,
+    ThroughputPolicyStatusResponse,
     WorkflowStatusResponse,
 )
 from web_api.pdf_generator import generate_source_report_pdf
@@ -192,6 +195,51 @@ _OBSERVABILITY_CONDITIONS = ("queue_backlog", "workflow_failures", "service_heal
 _observability_signal_state: dict[str, dict[str, datetime | None]] = {
     name: {"active_since": None, "last_alert_at": None} for name in _OBSERVABILITY_CONDITIONS
 }
+_THROUGHPUT_POLICY_PRESETS: dict[str, dict] = {
+    "conservative": {
+        "queue_defaults": {
+            FILES_NEW_FILE_TOPIC: {"warning": 20, "critical": 40},
+            DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 10, "critical": 20},
+            NOSEYPARKER_INPUT_TOPIC: {"warning": 8, "critical": 16},
+        },
+        "sustained_seconds": 45,
+        "cooldown_seconds": 90,
+        "baseline_parallelism": 2,
+        "expensive_parallelism": 1,
+        "expensive_floor": 1,
+    },
+    "balanced": {
+        "queue_defaults": {
+            FILES_NEW_FILE_TOPIC: {"warning": 50, "critical": 120},
+            DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 30, "critical": 80},
+            NOSEYPARKER_INPUT_TOPIC: {"warning": 20, "critical": 60},
+        },
+        "sustained_seconds": 60,
+        "cooldown_seconds": 120,
+        "baseline_parallelism": 3,
+        "expensive_parallelism": 1,
+        "expensive_floor": 1,
+    },
+    "aggressive": {
+        "queue_defaults": {
+            FILES_NEW_FILE_TOPIC: {"warning": 80, "critical": 180},
+            DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 60, "critical": 140},
+            NOSEYPARKER_INPUT_TOPIC: {"warning": 40, "critical": 100},
+        },
+        "sustained_seconds": 90,
+        "cooldown_seconds": 120,
+        "baseline_parallelism": 4,
+        "expensive_parallelism": 2,
+        "expensive_floor": 1,
+    },
+}
+_throughput_policy_state: dict[str, datetime | bool | str | None] = {
+    "active_since": None,
+    "cooldown_until": None,
+    "last_active": False,
+    "last_level": "normal",
+    "last_preset": "balanced",
+}
 
 
 def _utcnow() -> datetime:
@@ -202,6 +250,14 @@ def _reset_observability_state() -> None:
     for state in _observability_signal_state.values():
         state["active_since"] = None
         state["last_alert_at"] = None
+
+
+def _reset_throughput_policy_state() -> None:
+    _throughput_policy_state["active_since"] = None
+    _throughput_policy_state["cooldown_until"] = None
+    _throughput_policy_state["last_active"] = False
+    _throughput_policy_state["last_level"] = "normal"
+    _throughput_policy_state["last_preset"] = "balanced"
 
 
 def _env_int(*keys: str, default: int) -> int:
@@ -233,6 +289,146 @@ def _severity_for_threshold(value: int, warning: int, critical: int) -> str:
     if value >= warning:
         return "warning"
     return "normal"
+
+
+def _resolve_throughput_policy_preset(requested_preset: str | None) -> tuple[str, dict]:
+    selected = (requested_preset or os.getenv("THROUGHPUT_POLICY_PRESET", "balanced")).strip().lower()
+    if selected not in _THROUGHPUT_POLICY_PRESETS:
+        selected = "balanced"
+    return selected, _THROUGHPUT_POLICY_PRESETS[selected]
+
+
+def _queue_messages_for_topic(queue_metrics: dict, topic_name: str) -> int:
+    queue_details = queue_metrics.get("queue_details", {})
+    topic_details = queue_details.get(topic_name, {})
+    return int(topic_details.get("ready_messages", 0))
+
+
+def _severity_rank(severity: str) -> int:
+    if severity == "critical":
+        return 2
+    if severity == "warning":
+        return 1
+    return 0
+
+
+def _build_throughput_policy_status_payload(
+    queue_metrics: dict,
+    requested_preset: str | None = None,
+    telemetry_stale: bool = False,
+    now: datetime | None = None,
+) -> dict:
+    current_time = now or _utcnow()
+    selected_preset, preset_cfg = _resolve_throughput_policy_preset(requested_preset)
+    active_preset = "conservative" if telemetry_stale else selected_preset
+    if telemetry_stale:
+        preset_cfg = _THROUGHPUT_POLICY_PRESETS["conservative"]
+
+    queue_defaults = preset_cfg["queue_defaults"]
+    queue_states = []
+    top_severity = "normal"
+    for queue_name, thresholds in queue_defaults.items():
+        queued_messages = _queue_messages_for_topic(queue_metrics, queue_name)
+        severity = _severity_for_threshold(
+            queued_messages,
+            warning=int(thresholds["warning"]),
+            critical=int(thresholds["critical"]),
+        )
+        if _severity_rank(severity) > _severity_rank(top_severity):
+            top_severity = severity
+        queue_states.append(
+            {
+                "queue": queue_name,
+                "queued_messages": queued_messages,
+                "warning_threshold": int(thresholds["warning"]),
+                "critical_threshold": int(thresholds["critical"]),
+                "severity": severity,
+            }
+        )
+
+    if telemetry_stale:
+        top_severity = "critical"
+
+    sustained_required = int(preset_cfg["sustained_seconds"])
+    cooldown_seconds = int(preset_cfg["cooldown_seconds"])
+
+    if top_severity != "normal":
+        if _throughput_policy_state["active_since"] is None:
+            _throughput_policy_state["active_since"] = current_time
+    else:
+        if _throughput_policy_state["last_active"]:
+            _throughput_policy_state["cooldown_until"] = current_time + timedelta(seconds=cooldown_seconds)
+        _throughput_policy_state["active_since"] = None
+
+    sustained_seconds = 0
+    active_since = _throughput_policy_state["active_since"]
+    if isinstance(active_since, datetime):
+        sustained_seconds = int((current_time - active_since).total_seconds())
+
+    cooldown_remaining_seconds = 0
+    cooldown_until = _throughput_policy_state["cooldown_until"]
+    if isinstance(cooldown_until, datetime):
+        cooldown_remaining_seconds = max(0, int((cooldown_until - current_time).total_seconds()))
+        if cooldown_remaining_seconds == 0:
+            _throughput_policy_state["cooldown_until"] = None
+
+    policy_active = (
+        telemetry_stale
+        or (
+            top_severity in {"warning", "critical"}
+            and sustained_seconds >= sustained_required
+            and cooldown_remaining_seconds == 0
+        )
+    )
+    if telemetry_stale:
+        sustained_seconds = sustained_required
+
+    fail_safe_reason = "Queue telemetry unavailable; fail-safe conservative throttling active." if telemetry_stale else None
+    class_states = [
+        {
+            "class_name": "baseline",
+            "active_parallelism": int(preset_cfg["baseline_parallelism"]),
+            "minimum_floor": 1,
+            "deferred_admission": False,
+            "reason": "Core workflows retain baseline capacity.",
+        },
+        {
+            "class_name": "expensive",
+            "active_parallelism": (
+                int(preset_cfg["expensive_parallelism"])
+                if policy_active
+                else max(int(preset_cfg["expensive_parallelism"]), int(preset_cfg["expensive_floor"]))
+            ),
+            "minimum_floor": int(preset_cfg["expensive_floor"]),
+            "deferred_admission": policy_active,
+            "reason": (
+                "Expensive class deferred under sustained queue pressure."
+                if policy_active
+                else "Expensive class running at normal policy limits."
+            ),
+        },
+    ]
+
+    _throughput_policy_state["last_active"] = policy_active
+    _throughput_policy_state["last_level"] = top_severity
+    _throughput_policy_state["last_preset"] = active_preset
+
+    return {
+        "requested_preset": selected_preset,
+        "active_preset": active_preset,
+        "queue_pressure_level": top_severity,
+        "policy_active": policy_active,
+        "telemetry_stale": telemetry_stale,
+        "fail_safe": telemetry_stale,
+        "fail_safe_reason": fail_safe_reason,
+        "sustained_seconds": sustained_seconds,
+        "sustained_seconds_required": sustained_required,
+        "cooldown_seconds": cooldown_seconds,
+        "cooldown_remaining_seconds": cooldown_remaining_seconds,
+        "queue_states": queue_states,
+        "class_states": class_states,
+        "timestamp": current_time.isoformat(),
+    }
 
 
 async def send_postgres_notify(channel: str, payload: str = ""):
@@ -1226,6 +1422,54 @@ async def evaluate_observability_alerts(
         return await _evaluate_observability_alerts(summary_payload=summary_payload, emit_alerts=emit_alerts)
     except Exception as e:
         logger.exception(message="Error evaluating observability alerts")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.get(
+    "/workflows/throughput-policy/status",
+    response_model=ThroughputPolicyStatusResponse,
+    tags=["workflows"],
+    responses={500: {"model": ErrorResponse}},
+    summary="Get throughput policy status",
+    description="Return queue-pressure throughput policy status, sustained/cooldown state, and per-class active policy details.",
+)
+async def get_throughput_policy_status(
+    preset: str | None = Query(None, description="Optional named policy preset override"),
+    telemetry_stale: bool = Query(False, description="Force fail-safe conservative mode when telemetry is unavailable"),
+):
+    try:
+        queue_metrics, _, _, _ = await _load_observability_inputs()
+        return _build_throughput_policy_status_payload(
+            queue_metrics=queue_metrics,
+            requested_preset=preset,
+            telemetry_stale=telemetry_stale,
+        )
+    except Exception as e:
+        logger.exception(message="Error getting throughput policy status")
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@app.post(
+    "/workflows/throughput-policy/evaluate",
+    response_model=ThroughputPolicyStatusResponse,
+    tags=["workflows"],
+    responses={500: {"model": ErrorResponse}},
+    summary="Evaluate throughput policy",
+    description="Evaluate sustained queue-pressure policy activation and return policy class throttling status.",
+)
+async def evaluate_throughput_policy_status(
+    preset: str | None = Query(None, description="Optional named policy preset override"),
+    telemetry_stale: bool = Query(False, description="Force fail-safe conservative mode when telemetry is unavailable"),
+):
+    try:
+        queue_metrics, _, _, _ = await _load_observability_inputs()
+        return _build_throughput_policy_status_payload(
+            queue_metrics=queue_metrics,
+            requested_preset=preset,
+            telemetry_stale=telemetry_stale,
+        )
+    except Exception as e:
+        logger.exception(message="Error evaluating throughput policy status")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
