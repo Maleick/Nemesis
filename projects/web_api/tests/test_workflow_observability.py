@@ -252,3 +252,37 @@ def test_observability_alert_recovery_resets_sustained_timer(client, monkeypatch
     assert fifth.status_code == 200
     assert len(fifth.json()["alerts_emitted"]) == 1
     assert emitted.count("queue_backlog") == 2
+
+
+def test_throughput_policy_status_endpoint_returns_class_and_queue_state(client, monkeypatch):
+    web_main._reset_throughput_policy_state()
+
+    async def _mock_inputs():
+        return (
+            {
+                "queue_details": {
+                    "new_file": {"ready_messages": 180},
+                    "document_conversion_input": {"ready_messages": 40},
+                    "noseyparker_input": {"ready_messages": 10},
+                },
+                "summary": {
+                    "total_queued_messages": 230,
+                    "total_processing_messages": 0,
+                },
+            },
+            {},
+            {},
+            {},
+        )
+
+    monkeypatch.setattr("web_api.main._load_observability_inputs", _mock_inputs)
+
+    response = client.get("/workflows/throughput-policy/status?preset=balanced")
+    assert response.status_code == 200
+    payload = response.json()
+
+    assert payload["requested_preset"] == "balanced"
+    assert payload["active_preset"] == "balanced"
+    assert payload["queue_pressure_level"] in {"warning", "critical"}
+    assert any(state["queue"] == "new_file" for state in payload["queue_states"])
+    assert any(state["class_name"] == "expensive" for state in payload["class_states"])
