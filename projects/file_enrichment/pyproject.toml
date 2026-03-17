@@ -66,6 +66,8 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["file_enrichment"]
 
+[tool.uv]
+constraint-dependencies = ["pyopenssl>=26.0.0"]
 [tool.uv.sources]
 common = { path = "../../libs/common", editable = true }
 chromium = { path = "../../libs/chromium", editable = true }
