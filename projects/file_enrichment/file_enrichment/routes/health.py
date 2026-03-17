@@ -1,75 +1,29 @@
 import file_enrichment.global_vars as global_vars
-from common.health_contract import (
-    build_health_response,
-    dependency_failed,
-    dependency_failed_from_exception,
-    dependency_ok,
-)
-from common.logger import get_logger
+from common.db import get_pool_stats, update_pool_gauges
 from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
+from prometheus_client import generate_latest
 
 router = APIRouter()
-logger = get_logger(__name__)
 
 
 @router.api_route("/healthz", methods=["GET", "HEAD"])
 async def healthcheck():
-    """Dependency-aware readiness endpoint for file enrichment service."""
-    dependencies = []
+    """Health check endpoint for Docker healthcheck."""
+    return {"status": "healthy"}
 
-    try:
-        if not global_vars.asyncpg_pool:
-            dependencies.append(
-                dependency_failed(
-                    "postgres",
-                    "Database pool not initialized",
-                    remediation="Verify file-enrichment startup completed and Postgres is reachable",
-                    logger=logger,
-                    service="file_enrichment",
-                )
-            )
-        else:
-            async with global_vars.asyncpg_pool.acquire() as connection:
-                await connection.fetchval("SELECT 1")
-            dependencies.append(dependency_ok("postgres"))
 
-        if not global_vars.workflow_client or not global_vars.workflow_manager:
-            dependencies.append(
-                dependency_failed(
-                    "workflow-runtime",
-                    "Workflow runtime not initialized",
-                    remediation="Check Dapr sidecar and workflow runtime initialization logs",
-                    logger=logger,
-                    service="file_enrichment",
-                )
-            )
-        else:
-            dependencies.append(dependency_ok("workflow-runtime"))
+@router.get("/system/pool-stats")
+async def pool_stats():
+    """Return asyncpg connection pool utilization stats."""
+    if global_vars.asyncpg_pool is None:
+        return {"error": "pool not initialized"}
+    return get_pool_stats(global_vars.asyncpg_pool)
 
-        if not global_vars.module_execution_order:
-            dependencies.append(
-                dependency_failed(
-                    "enrichment-modules",
-                    "No enrichment modules loaded",
-                    remediation="Check enrichment module configuration and startup logs",
-                    logger=logger,
-                    service="file_enrichment",
-                )
-            )
-        else:
-            dependencies.append(
-                dependency_ok("enrichment-modules", detail=f"{len(global_vars.module_execution_order)} modules loaded")
-            )
 
-        return build_health_response(service="file_enrichment", dependencies=dependencies)
-    except Exception as e:
-        dependencies.append(
-            dependency_failed_from_exception(
-                "health-check",
-                e,
-                remediation="Inspect file_enrichment health check logs",
-                logger=logger,
-                service="file_enrichment",
-            )
-        )
-        return build_health_response(service="file_enrichment", dependencies=dependencies)
+@router.get("/metrics")
+async def metrics():
+    """Prometheus metrics endpoint. Updates pool gauges on each scrape."""
+    if global_vars.asyncpg_pool is not None:
+        update_pool_gauges(global_vars.asyncpg_pool)
+    return PlainTextResponse(generate_latest(), media_type="text/plain; version=0.0.4; charset=utf-8")
