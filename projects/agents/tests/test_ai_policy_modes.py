@@ -1,6 +1,11 @@
 """Regression tests for AI policy-mode and override contract helpers."""
 
-from agents.policy_context import build_policy_context, build_reporting_policy_context, confidence_band, policy_mode_for_confidence
+from agents.policy_context import (
+    build_policy_context,
+    build_reporting_policy_context,
+    confidence_band,
+    policy_mode_for_confidence,
+)
 
 
 def test_policy_mode_for_confidence_thresholds():

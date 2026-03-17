@@ -1,9 +1,9 @@
 """Regression tests for queue-pressure throughput policy behavior."""
 
-from datetime import UTC, datetime, timedelta
 import importlib
 import sys
 import types
+from datetime import UTC, datetime, timedelta
 
 
 def _load_subscription_module():

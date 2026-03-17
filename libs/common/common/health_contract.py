@@ -4,7 +4,6 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 import structlog
-
 from common.logger import log_dependency_failure
 from common.models2.health import DependencyReadiness, ReadinessLevel, ServiceReadinessResponse
 

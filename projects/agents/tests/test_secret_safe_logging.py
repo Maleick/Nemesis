@@ -2,9 +2,8 @@
 
 import asyncio
 
-import pytest
-
 import agents.litellm_startup as litellm_startup
+import pytest
 from agents.tasks import chatbot
 from common.logger import sanitize_log_detail
 

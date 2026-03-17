@@ -27,6 +27,11 @@ from file_enrichment.activities.publish_findings import publish_alerts_for_findi
 logger = get_logger(__name__)
 
 
+def _jwt_log_context(jwt_token: str) -> dict[str, int]:
+    """Return safe logging context for JWT tokens (length only, no content)."""
+    return {"jwt_length": len(jwt_token or "")}
+
+
 async def titus_subscription_handler(event: CloudEvent[TitusOutput]):
     """Handler for incoming Titus scan results"""
     titus_output = event.data

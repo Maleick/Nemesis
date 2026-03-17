@@ -4,6 +4,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 
+import web_api.main as web_main
 from common.models import File as FileModel
 from common.queues import (
     ALERTING_NEW_ALERT_TOPIC,
@@ -14,8 +15,6 @@ from common.queues import (
     get_topic_to_queue_name_mapping,
 )
 from web_api.queue_monitor import WorkflowQueueMonitor
-
-import web_api.main as web_main
 
 
 def test_queue_monitor_mapping_matches_canonical_topic_contracts():

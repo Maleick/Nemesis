@@ -2,8 +2,8 @@
 
 import asyncio
 
-from agents.auth_modes import LLMAuthMode
 import agents.auth_provider as auth_provider
+from agents.auth_modes import LLMAuthMode
 
 
 def test_resolve_llm_auth_invalid_mode_reports_unhealthy(monkeypatch):

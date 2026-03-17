@@ -19,7 +19,6 @@ from agents.tasks.dotnet_analyzer import analyze_dotnet_assembly
 from agents.tasks.summarizer import summarize_text
 from agents.tasks.translate import translate_text
 from common.db import get_postgres_connection_str
-from common.logger import sanitize_exception_message
 from common.health_contract import (
     build_health_response,
     dependency_degraded,
@@ -27,6 +26,7 @@ from common.health_contract import (
     dependency_failed_from_exception,
     dependency_ok,
 )
+from common.logger import sanitize_exception_message
 from dapr.clients import DaprClient
 
 # from dapr.ext.fastapi import DaprApp # needed if we're doing pub/sub

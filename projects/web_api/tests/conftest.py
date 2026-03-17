@@ -4,9 +4,9 @@ Patches are applied at module level to prevent web_api.main from connecting
 to real services (Dapr, S3 storage, PostgreSQL) during import.
 """
 
-from contextlib import asynccontextmanager
 import sys
 import types
+from contextlib import asynccontextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest

@@ -2,9 +2,9 @@
 
 import pytest
 from agents.codex_oauth_model import (
-    CodexOAuthResponsesModel,
     DEFAULT_CODEX_CLIENT_VERSION,
     DEFAULT_CODEX_INSTRUCTIONS,
+    CodexOAuthResponsesModel,
 )
 from pydantic_ai.models.openai import OpenAIResponsesModel
 

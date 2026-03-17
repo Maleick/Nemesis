@@ -2,7 +2,6 @@
 
 from common.queues import (
     ALERTING_NEW_ALERT_TOPIC,
-    ALERTING_PUBSUB,
     FILES_NEW_FILE_TOPIC,
     FILES_PUBSUB,
     get_queue_contract,
