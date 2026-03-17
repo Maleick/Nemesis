@@ -16,9 +16,9 @@ class WorkflowQueueMonitor:
 
     TOPIC_TO_QUEUE_MAPPING = {
         "new_file": "files-new_file",
-        "document_conversion_input": "files-document_conversion_input",
+        "document_conversion_input": "document-conversion-document_conversion_input",
         "bulk_enrichment_task": "files-bulk_enrichment_task",
-        "workflow_completed": "workflow_monitor-workflow_completed",
+        "workflow_completed": "workflow-monitor-workflow_completed",
         "new_alert": "alerting-new_alert",
         "dotnet_input": "dotnet-dotnet_input",
         "dotnet_output": "dotnet-dotnet_output",

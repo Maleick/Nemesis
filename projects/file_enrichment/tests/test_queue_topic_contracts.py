@@ -11,8 +11,8 @@ from common.queues import (
     FILES_BULK_ENRICHMENT_TASK_TOPIC,
     FILES_NEW_FILE_TOPIC,
     FILES_PUBSUB,
-    NOSEYPARKER_OUTPUT_TOPIC,
-    NOSEYPARKER_PUBSUB,
+    TITUS_OUTPUT_TOPIC,
+    TITUS_PUBSUB,
     WORKFLOW_MONITOR_COMPLETED_TOPIC,
     WORKFLOW_MONITOR_PUBSUB,
     get_queue_contract,
@@ -28,7 +28,7 @@ def test_contract_metadata_covers_file_enrichment_queue_boundaries():
     contracts = [
         get_queue_contract(FILES_PUBSUB, FILES_NEW_FILE_TOPIC),
         get_queue_contract(FILES_PUBSUB, FILES_BULK_ENRICHMENT_TASK_TOPIC),
-        get_queue_contract(NOSEYPARKER_PUBSUB, NOSEYPARKER_OUTPUT_TOPIC),
+        get_queue_contract(TITUS_PUBSUB, TITUS_OUTPUT_TOPIC),
         get_queue_contract(DOTNET_PUBSUB, DOTNET_OUTPUT_TOPIC),
         get_queue_contract(WORKFLOW_MONITOR_PUBSUB, WORKFLOW_MONITOR_COMPLETED_TOPIC),
         get_queue_contract(ALERTING_PUBSUB, ALERTING_NEW_ALERT_TOPIC),
@@ -44,7 +44,7 @@ def test_controller_subscriptions_use_canonical_queue_constants():
 
     assert "dapr_app.subscribe(pubsub=FILES_PUBSUB, topic=FILES_NEW_FILE_TOPIC)" in source
     assert "dapr_app.subscribe(pubsub=FILES_PUBSUB, topic=FILES_BULK_ENRICHMENT_TASK_TOPIC)" in source
-    assert "dapr_app.subscribe(pubsub=NOSEYPARKER_PUBSUB, topic=NOSEYPARKER_OUTPUT_TOPIC)" in source
+    assert "dapr_app.subscribe(pubsub=TITUS_PUBSUB, topic=TITUS_OUTPUT_TOPIC)" in source
     assert "dapr_app.subscribe(pubsub=DOTNET_PUBSUB, topic=DOTNET_OUTPUT_TOPIC)" in source
 
 

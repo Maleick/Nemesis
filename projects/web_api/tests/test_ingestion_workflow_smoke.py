@@ -51,7 +51,7 @@ def test_upload_lifecycle_download_smoke_contract(client, mock_storage, monkeypa
                     "started_at": datetime(2026, 2, 25, 0, 2, tzinfo=UTC),
                     "runtime_seconds": 1.2,
                     "filename": "sample.txt",
-                    "success_modules": ["noseyparker"],
+                    "success_modules": ["titus"],
                     "failure_modules": [],
                     "error": None,
                 }

@@ -11,7 +11,7 @@ def _queue_metrics(new_file_ready: int, doc_ready: int = 0, nosey_ready: int = 0
         "queue_details": {
             "new_file": {"ready_messages": new_file_ready},
             "document_conversion_input": {"ready_messages": doc_ready},
-            "noseyparker_input": {"ready_messages": nosey_ready},
+            "titus_input": {"ready_messages": nosey_ready},
         },
         "summary": {
             "total_queued_messages": total_queued,

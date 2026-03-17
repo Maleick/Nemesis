@@ -1,9 +1,9 @@
-"""Security regressions for NoseyParker JWT handling logs."""
+"""Security regressions for Titus JWT handling logs."""
 
 import sys
 import types
 
-# NoseyParker module imports file_enrichment.global_vars, which initializes
+# Titus module imports file_enrichment.global_vars, which initializes
 # Dapr-backed clients at import time. Stub it for isolated unit tests.
 _global_vars_stub = types.ModuleType("file_enrichment.global_vars")
 _global_vars_stub.tracking_service = None
@@ -25,7 +25,7 @@ _activities_stub.publish_findings = _publish_findings_stub
 sys.modules.setdefault("file_enrichment.activities", _activities_stub)
 sys.modules.setdefault("file_enrichment.activities.publish_findings", _publish_findings_stub)
 
-from file_enrichment.subscriptions import noseyparker
+from file_enrichment.subscriptions import titus
 
 
 class _DummyLogger:
@@ -39,9 +39,9 @@ class _DummyLogger:
 def test_is_jwt_expired_invalid_format_does_not_log_raw_token(monkeypatch):
     dummy_logger = _DummyLogger()
     token = "very-secret-token-without-dots"
-    monkeypatch.setattr(noseyparker, "logger", dummy_logger)
+    monkeypatch.setattr(titus, "logger", dummy_logger)
 
-    expired, payload = noseyparker.is_jwt_expired(token)
+    expired, payload = titus.is_jwt_expired(token)
 
     assert expired is False
     assert payload == {}
@@ -54,9 +54,9 @@ def test_is_jwt_expired_invalid_format_does_not_log_raw_token(monkeypatch):
 def test_is_jwt_expired_decode_failure_does_not_log_raw_token(monkeypatch):
     dummy_logger = _DummyLogger()
     token = "aaaa.b@d_payload.cccc"
-    monkeypatch.setattr(noseyparker, "logger", dummy_logger)
+    monkeypatch.setattr(titus, "logger", dummy_logger)
 
-    expired, payload = noseyparker.is_jwt_expired(token)
+    expired, payload = titus.is_jwt_expired(token)
 
     assert expired is True
     assert payload == {}

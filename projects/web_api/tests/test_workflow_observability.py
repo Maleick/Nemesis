@@ -54,7 +54,7 @@ def test_workflow_lifecycle_route_returns_correlated_payload(client, monkeypatch
                     "started_at": datetime(2026, 2, 25, 0, 2, tzinfo=UTC),
                     "runtime_seconds": 5.5,
                     "filename": "example.txt",
-                    "success_modules": ["noseyparker"],
+                    "success_modules": ["titus"],
                     "failure_modules": [],
                     "error": None,
                 }
@@ -104,7 +104,7 @@ def test_observability_summary_reports_signal_severities(client, monkeypatch):
                     "total_queued_messages": 250,
                     "total_processing_messages": 11,
                     "bottleneck_queues": ["new_file", "dotnet_input"],
-                    "queues_without_consumers": ["noseyparker_output"],
+                    "queues_without_consumers": ["titus_output"],
                 }
             },
             {"active_workflows": 4},
@@ -279,7 +279,7 @@ def test_throughput_policy_status_endpoint_returns_class_and_queue_state(client,
                 "queue_details": {
                     "new_file": {"ready_messages": 180},
                     "document_conversion_input": {"ready_messages": 40},
-                    "noseyparker_input": {"ready_messages": 10},
+                    "titus_input": {"ready_messages": 10},
                 },
                 "summary": {
                     "total_queued_messages": 230,

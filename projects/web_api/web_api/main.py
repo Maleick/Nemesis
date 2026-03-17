@@ -41,7 +41,7 @@ from common.queues import (
     FILES_BULK_ENRICHMENT_TASK_TOPIC,
     FILES_NEW_FILE_TOPIC,
     FILES_PUBSUB,
-    NOSEYPARKER_INPUT_TOPIC,
+    TITUS_INPUT_TOPIC,
     WORKFLOW_MONITOR_COMPLETED_TOPIC,
     WORKFLOW_MONITOR_PUBSUB,
 )
@@ -200,7 +200,7 @@ _THROUGHPUT_POLICY_PRESETS: dict[str, dict] = {
         "queue_defaults": {
             FILES_NEW_FILE_TOPIC: {"warning": 20, "critical": 40},
             DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 10, "critical": 20},
-            NOSEYPARKER_INPUT_TOPIC: {"warning": 8, "critical": 16},
+            TITUS_INPUT_TOPIC: {"warning": 8, "critical": 16},
         },
         "sustained_seconds": 45,
         "cooldown_seconds": 90,
@@ -212,7 +212,7 @@ _THROUGHPUT_POLICY_PRESETS: dict[str, dict] = {
         "queue_defaults": {
             FILES_NEW_FILE_TOPIC: {"warning": 50, "critical": 120},
             DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 30, "critical": 80},
-            NOSEYPARKER_INPUT_TOPIC: {"warning": 20, "critical": 60},
+            TITUS_INPUT_TOPIC: {"warning": 20, "critical": 60},
         },
         "sustained_seconds": 60,
         "cooldown_seconds": 120,
@@ -224,7 +224,7 @@ _THROUGHPUT_POLICY_PRESETS: dict[str, dict] = {
         "queue_defaults": {
             FILES_NEW_FILE_TOPIC: {"warning": 80, "critical": 180},
             DOCUMENT_CONVERSION_INPUT_TOPIC: {"warning": 60, "critical": 140},
-            NOSEYPARKER_INPUT_TOPIC: {"warning": 40, "critical": 100},
+            TITUS_INPUT_TOPIC: {"warning": 40, "critical": 100},
         },
         "sustained_seconds": 90,
         "cooldown_seconds": 120,
