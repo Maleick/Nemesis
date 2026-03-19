@@ -49,16 +49,16 @@ This milestone is complete only when all are true:
 
 ## Slices
 
-- [ ] **S01: Dead Code Removal** `risk:low` `depends:[]`
+- [x] **S01: Dead Code Removal** `risk:low` `depends:[]`
   > After this: `.codex/`, `AGENTS.md`, `codex_oauth_model.py`, Codex tests, Gemini configs all gone. `ruff check` and build pass clean.
 
-- [ ] **S02: LiteLLM GitHub Copilot Provider** `risk:high` `depends:[]`
+- [x] **S02: LiteLLM GitHub Copilot Provider** `risk:high` `depends:[]`
   > After this: `infra/litellm/config.yml` uses `github_copilot/gpt-5.4`, OAuth token dir mounted in compose, placeholder JSON removed. LiteLLM container starts and Copilot provider is configured (proven by config inspection, not yet by live auth).
 
-- [ ] **S03: Auth Mode Replacement** `risk:medium` `depends:[S01,S02]`
+- [x] **S03: Auth Mode Replacement** `risk:medium` `depends:[S01,S02]`
   > After this: `auth_modes.py` has single Copilot mode, `auth_provider.py` resolves Copilot credentials via LiteLLM, `model_manager.py` has no Codex/official_key branching, `compose.yaml`/`env.example` updated, LiteLLM healthcheck fixed, all agent tests pass.
 
-- [ ] **S04: Local Deployment Verification** `risk:high` `depends:[S03]`
+- [x] **S04: Local Deployment Verification** `risk:high` `depends:[S03]`
   > After this: `nemesis-ctl.sh start prod --llm` on OrbStack, OAuth device flow completes, agents health endpoint reports healthy with Copilot mode, LLM triage/summarization call succeeds against GPT-5.4.
 
 ## Boundary Map
